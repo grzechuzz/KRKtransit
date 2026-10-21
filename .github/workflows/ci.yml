@@ -80,7 +80,7 @@ jobs:
 
   integration-tests:
     name: Integration tests
-    needs: unit-tests
+    needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
