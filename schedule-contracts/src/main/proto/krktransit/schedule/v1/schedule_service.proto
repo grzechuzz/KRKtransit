@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package krktransit.schedule.v1;
+
+option java_package = "pl.krktransit.schedule.contracts.v1";
+option java_multiple_files = true;
+option java_outer_classname = "ScheduleServiceProto";
+
+// Read-only access to successfully published schedules. Never falls back to a
+// different hash when the requested version is missing or expired.
+service ScheduleService {
+  rpc GetCurrentHash(GetCurrentHashRequest) returns (GetCurrentHashResponse);
+  rpc GetTripContext(GetTripContextRequest) returns (GetTripContextResponse);
+  rpc GetShape(GetShapeRequest) returns (GetShapeResponse);
+}
+
+message FeedId {
+  // Required, nonblank English identifier, for example "krakow".
+  optional string city_id = 1;
+  // Required, nonblank source identifier, for example "mpk".
+  optional string source_id = 2;
+}
+
+message GetCurrentHashRequest {
+  // Required.
+  FeedId feed_id = 1;
+}
+
+message GetCurrentHashResponse {
+  // Required: SHA-256 of the exact published ZIP bytes, 64 lowercase hex digits.
+  optional string hash = 1;
+}
+
+message GetTripContextRequest {
+  // Required SHA-256, exactly 64 lowercase hexadecimal digits.
+  optional string hash = 1;
+  // Required scalar scoped ID, for example "krakow:mpk:123".
+  optional string trip_id = 2;
+}
+
+message GetTripContextResponse {
+  optional string hash = 1;
+  optional string trip_id = 2;
+  optional string route_id = 3;
+  optional string line_number = 4;
+  // Absence is preserved. Zero is a valid value.
+  optional int32 direction_id = 5;
+  optional string headsign = 6;
+  optional string shape_id = 7;
+  optional int32 max_stop_sequence = 8;
+  // Ordered stop occurrences; a stop ID may occur more than once in a trip.
+  repeated TripStop stops = 9;
+}
+
+message TripStop {
+  optional string stop_id = 1;
+  optional string stop_name = 2;
+  optional string stop_desc = 3;
+  optional double latitude = 4;
+  optional double longitude = 5;
+  optional int32 stop_sequence = 6;
+  // Seconds from service-day midnight, including GTFS times above 24:00:00.
+  // Required in a successful response; zero is valid.
+  optional int32 arrival_seconds = 7;
+  // Required in a successful response; zero is valid.
+  optional int32 departure_seconds = 8;
+}
+
+message GetShapeRequest {
+  optional string hash = 1;
+  optional string shape_id = 2;
+}
+
+message GetShapeResponse {
+  optional string hash = 1;
+  optional string shape_id = 2;
+  // Ordered by source point sequence. Duplicate sequences remain accepted.
+  repeated ShapePoint points = 3;
+}
+
+message ShapePoint {
+  optional double latitude = 1;
+  optional double longitude = 2;
+  optional int32 sequence = 3;
+}

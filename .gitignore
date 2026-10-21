@@ -30,12 +30,15 @@ secrets/
 *.log
 logs/
 *.pid
+__pycache__/
 
 # Local data and dumps
 data/
 dumps/
 *.dump
 *.sql
+!migrations/src/main/resources/db/migration/*.sql
+!schedule-service/src/main/resources/db/migration/*.sql
 *.sqlite
 *.db
 
