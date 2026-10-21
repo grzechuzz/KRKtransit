@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: gtfs-schedule-service
+  main:
+    web-application-type: none
+  datasource:
+    url: ${SCHEDULE_DB_URL}
+    username: ${SCHEDULE_DB_USER}
+    password: ${SCHEDULE_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 1
+      connection-timeout: 10000
+  grpc:
+    server:
+      address: ${SCHEDULE_GRPC_ADDRESS:127.0.0.1}
+      port: ${SCHEDULE_GRPC_PORT:9090}
+      reflection:
+        enabled: false
+      shutdown:
+        grace-period: 30s
+  flyway:
+    enabled: false
+
+schedule:
+  jobs-enabled: ${SCHEDULE_JOBS_ENABLED:true}
+  archive-directory: ${SCHEDULE_ARCHIVE_DIRECTORY:./data/archives}
+  temp-directory: ${SCHEDULE_TEMP_DIRECTORY:./data/tmp}
+  import-interval: 1h
+  cleanup-interval: 1h
+  cleanup-batch-size: 10000
+  max-uncompressed-bytes: 8589934592
+  grpc-token: ${SCHEDULE_GRPC_TOKEN:}
+  grpc-max-concurrent-calls: ${SCHEDULE_GRPC_MAX_CONCURRENT_CALLS:2500}
+  download:
+    connect-timeout: 10s
+    request-timeout: 60s
+    attempts: 3
+    initial-backoff: 5s
+    max-retry-delay: 30s
+    max-bytes: 536870912
+    max-concurrent: 3
+    max-per-host: 3
+  feeds:
+    - city-id: krakow
+      source-id: mpk-bus
+      static-url: https://gtfs.ztp.krakow.pl/GTFS_KRK_A.zip
+    - city-id: krakow
+      source-id: mobilis-bus
+      static-url: https://gtfs.ztp.krakow.pl/GTFS_KRK_M.zip
+    - city-id: krakow
+      source-id: mpk-tram
+      static-url: https://gtfs.ztp.krakow.pl/GTFS_KRK_T.zip
