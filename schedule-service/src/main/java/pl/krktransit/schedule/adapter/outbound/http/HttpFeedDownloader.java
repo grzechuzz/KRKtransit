@@ -32,7 +32,7 @@ public final class HttpFeedDownloader implements FeedDownloader {
     private static final System.Logger LOG = System.getLogger(HttpFeedDownloader.class.getName());
     private static final HttpHeaders NO_HEADERS = HttpHeaders.of(Map.of(), (key, value) -> true);
     private final HttpClient client;
-    private final Path tempDirectory;
+    private final DownloadWorkspace workspace;
     private final Duration requestTimeout;
     private final int maxAttempts;
     private final long maxDownloadBytes;
@@ -50,7 +50,7 @@ public final class HttpFeedDownloader implements FeedDownloader {
                        Duration initialBackoff, Duration maxRetryDelay, long maxDownloadBytes, Clock clock, Sleeper sleeper) {
         validateDownloadLimits(requestTimeout, maxAttempts, initialBackoff, maxRetryDelay, maxDownloadBytes);
         this.client = client;
-        this.tempDirectory = tempDirectory;
+        this.workspace = openWorkspace(tempDirectory);
         this.requestTimeout = requestTimeout;
         this.maxAttempts = maxAttempts;
         this.maxDownloadBytes = maxDownloadBytes;
@@ -139,10 +139,17 @@ public final class HttpFeedDownloader implements FeedDownloader {
 
     private Path createTemporary() {
         try {
-            Files.createDirectories(tempDirectory);
-            return Files.createTempFile(tempDirectory, "gtfs-", ".zip");
+            return workspace.createTemporary();
         } catch (IOException failure) {
             throw new ImportFailure(ImportFailure.Kind.DOWNLOAD, "Cannot create temporary download", failure);
+        }
+    }
+
+    private static DownloadWorkspace openWorkspace(Path directory) {
+        try {
+            return new DownloadWorkspace(directory);
+        } catch (IOException failure) {
+            throw new ImportFailure(ImportFailure.Kind.DOWNLOAD, "Cannot open temporary download workspace", failure);
         }
     }
 
@@ -206,6 +213,7 @@ public final class HttpFeedDownloader implements FeedDownloader {
             client.close();
         } finally {
             retryCleanup();
+            workspace.close();
         }
     }
 

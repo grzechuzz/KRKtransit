@@ -4,6 +4,7 @@ import java.net.InetAddress;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -114,7 +115,8 @@ class ScheduleConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = "schedule.jobs-enabled", havingValue = "true", matchIfMissing = true)
-    ScheduledImportJobs scheduledImportJobs(ImportCycleRunner runner, ThreadPoolTaskScheduler scheduler,
+    ScheduledImportJobs scheduledImportJobs(ImportCycleRunner runner,
+                                           @Qualifier("scheduleJobExecutor") ThreadPoolTaskScheduler scheduler,
                                            ScheduleProperties properties, Clock clock) {
         return new ScheduledImportJobs(runner, scheduler, properties, clock);
     }

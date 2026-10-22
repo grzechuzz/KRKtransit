@@ -2,6 +2,7 @@ package pl.krktransit.schedule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import com.sun.net.httpserver.HttpServer;
 import io.grpc.ManagedChannel;
@@ -15,6 +16,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,6 +104,32 @@ class ScheduleServiceIT {
         try (var connection = POSTGRES.dataSource().getConnection(); var sql = connection.createStatement()) {
             sql.execute(RESET_SCHEDULE_SQL);
         }
+    }
+
+    @Test
+    void startsWithDefaultSchedulersAndAutomaticallyImportsConfiguredSources() throws Exception {
+        byte[] zip = GtfsFixtures.valid("25:30:00");
+        String hash = GtfsFixtures.hash(zip);
+        try (var provider = new FixtureProvider(zip);
+                var application = application(provider, true); var client = new LiveClient(application)) {
+            await().atMost(Duration.ofSeconds(20)).ignoreException(StatusRuntimeException.class).untilAsserted(() -> {
+                for (String source : SOURCES) {
+                    assertThat(client.stub().getCurrentHash(currentRequest(source)).getHash()).isEqualTo(hash);
+                    assertThat(client.stub().getTripContext(tripRequest(hash, source)).getTripId())
+                            .isEqualTo("krakow:" + source + ":001");
+                }
+            });
+            assertThatThrownBy(() -> client.stub().getTripContext(GetTripContextRequest.newBuilder()
+                    .setHash(hash).setTripId("krakow:mpk:bad\0id").build()))
+                    .isInstanceOfSatisfying(StatusRuntimeException.class,
+                            failure -> assertThat(failure.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT));
+            assertThatThrownBy(() -> client.stub().getShape(GetShapeRequest.newBuilder()
+                    .setHash(hash).setShapeId("krakow:mpk:bad\0id").build()))
+                    .isInstanceOfSatisfying(StatusRuntimeException.class,
+                            failure -> assertThat(failure.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT));
+            assertShape(client, hash);
+        }
+        assertDownloadsRemoved();
     }
 
     @Test
@@ -205,18 +233,22 @@ class ScheduleServiceIT {
     }
 
     private void assertDownloadsRemoved() throws IOException {
-        try (var files = Files.list(temporary.resolve("downloads"))) {
-            assertThat(files).isEmpty();
+        try (var files = Files.walk(temporary.resolve("downloads"))) {
+            assertThat(files.filter(path -> path.getFileName().toString().endsWith(".zip"))).isEmpty();
         }
     }
 
     private ConfigurableApplicationContext application(FixtureProvider provider) {
+        return application(provider, false);
+    }
+
+    private ConfigurableApplicationContext application(FixtureProvider provider, boolean jobsEnabled) {
         var arguments = new ArrayList<>(List.of(
                 "--spring.datasource.url=" + POSTGRES.getJdbcUrl(),
                 "--spring.datasource.username=" + RUNTIME_USER,
                 "--spring.datasource.password=" + RUNTIME_PASSWORD,
                 "--spring.grpc.server.address=127.0.0.1", "--spring.grpc.server.port=0",
-                "--schedule.jobs-enabled=false", "--schedule.grpc-token=" + TOKEN,
+                "--schedule.jobs-enabled=" + jobsEnabled, "--schedule.grpc-token=" + TOKEN,
                 "--schedule.download.attempts=1",
                 "--schedule.archive-directory=" + temporary.resolve("archives"),
                 "--schedule.temp-directory=" + temporary.resolve("downloads")));

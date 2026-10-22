@@ -46,6 +46,16 @@ public record ScheduleProperties(List<Source> feeds, Path archiveDirectory, Path
         return feeds.stream().map(Source::config).toList();
     }
 
+    @Override
+    public String toString() {
+        return "ScheduleProperties[feeds=" + feeds + ", archiveDirectory=" + archiveDirectory
+                + ", tempDirectory=" + tempDirectory + ", jobsEnabled=" + jobsEnabled
+                + ", importInterval=" + importInterval + ", cleanupInterval=" + cleanupInterval
+                + ", cleanupBatchSize=" + cleanupBatchSize + ", maxUncompressedBytes=" + maxUncompressedBytes
+                + ", download=" + download + ", grpcToken=[REDACTED], grpcMaxConcurrentCalls="
+                + grpcMaxConcurrentCalls + "]";
+    }
+
     public record Source(String cityId, String sourceId, URI staticUrl) {
         FeedId id() { return new FeedId(cityId, sourceId); }
         FeedConfig config() { return new FeedConfig(id(), staticUrl); }

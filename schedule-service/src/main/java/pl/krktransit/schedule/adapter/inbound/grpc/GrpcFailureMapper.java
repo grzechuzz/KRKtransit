@@ -23,8 +23,10 @@ final class GrpcFailureMapper {
     }
 
     StatusRuntimeException storage(ImportFailure failure) {
-        if (failure.kind() != ImportFailure.Kind.PERSISTENCE) throw failure;
-        return error(Status.UNAVAILABLE, "STORAGE_UNAVAILABLE", "Schedule storage is temporarily unavailable");
+        if (failure.kind() == ImportFailure.Kind.PERSISTENCE) {
+            return error(Status.UNAVAILABLE, "STORAGE_UNAVAILABLE", "Schedule storage is temporarily unavailable");
+        }
+        return error(Status.INTERNAL, "STORAGE_READ_FAILED", "Schedule storage read failed");
     }
 
     private StatusRuntimeException error(Status status, String code, String description) {

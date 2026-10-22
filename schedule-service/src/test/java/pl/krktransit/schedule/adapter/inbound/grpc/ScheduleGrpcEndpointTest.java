@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import pl.krktransit.schedule.application.importing.ImportFailure;
 import pl.krktransit.schedule.application.port.ScheduleReader;
 import pl.krktransit.schedule.application.querying.GeometryPoint;
@@ -124,13 +125,40 @@ class ScheduleGrpcEndpointTest {
                 .isEqualTo(kind.name());
     }
 
-    @Test
-    void reportsStorageFailureWithoutExposingItsDetails() {
-        reader.storageFailure = true;
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void rejectsNulBeforeCallingStorage(boolean shape) {
+        String id = "krakow:mpk:bad\0id";
+        if (shape) {
+            assertStatus(Status.Code.INVALID_ARGUMENT, () -> client.getShape(
+                    GetShapeRequest.newBuilder().setHash(HASH).setShapeId(id).build()));
+        } else {
+            assertStatus(Status.Code.INVALID_ARGUMENT, () -> client.getTripContext(
+                    GetTripContextRequest.newBuilder().setHash(HASH).setTripId(id).build()));
+        }
+        assertThat(reader.entityReads).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"  krakow:mpk:001:02  ", "krakow:mpk:żółć"})
+    void preservesNonblankIdentifiersWithoutTrimmingOrRestrictingThem(String id) {
+        assertThat(client.getTripContext(GetTripContextRequest.newBuilder().setHash(HASH).setTripId(id).build())
+                .getTripId()).isEqualTo(id);
+        assertThat(client.getShape(GetShapeRequest.newBuilder().setHash(HASH).setShapeId(id).build())
+                .getShapeId()).isEqualTo(id);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ImportFailure.Kind.class, names = {"PERSISTENCE", "VALIDATION"})
+    void reportsStorageFailureWithoutExposingItsDetails(ImportFailure.Kind kind) {
+        reader.storageFailure = kind;
 
         var failure = assertThrows(StatusRuntimeException.class, () -> client.getTripContext(tripRequest()));
 
-        assertThat(failure.getStatus().getCode()).isEqualTo(Status.Code.UNAVAILABLE);
+        assertThat(failure.getStatus().getCode()).isEqualTo(
+                kind == ImportFailure.Kind.PERSISTENCE ? Status.Code.UNAVAILABLE : Status.Code.INTERNAL);
+        assertThat(failure.getTrailers().get(Metadata.Key.of("schedule-error-code", Metadata.ASCII_STRING_MARSHALLER)))
+                .isEqualTo(kind == ImportFailure.Kind.PERSISTENCE ? "STORAGE_UNAVAILABLE" : "STORAGE_READ_FAILED");
         assertThat(failure.getStatus().getDescription()).doesNotContain("password");
     }
 
@@ -145,7 +173,8 @@ class ScheduleGrpcEndpointTest {
     private static final class StubReader implements ScheduleReader {
         private pl.krktransit.schedule.domain.feed.FeedId feed;
         private LookupFailure.Kind lookupFailure;
-        private boolean storageFailure;
+        private ImportFailure.Kind storageFailure;
+        private int entityReads;
 
         @Override
         public ScheduleHash currentHash(pl.krktransit.schedule.domain.feed.FeedId feed) {
@@ -155,8 +184,9 @@ class ScheduleGrpcEndpointTest {
 
         @Override
         public TripContext tripContext(ScheduleHash hash, String tripId) {
+            entityReads++;
             if (lookupFailure != null) throw new LookupFailure(lookupFailure, "Missing schedule context");
-            if (storageFailure) throw new ImportFailure(ImportFailure.Kind.PERSISTENCE, "secret password");
+            if (storageFailure != null) throw new ImportFailure(storageFailure, "secret password");
             return new TripContext(hash, tripId, "krakow:mpk:route", "123", 0, null, null, 2,
                     List.of(new TripStop("krakow:mpk:stop", "Start", null, 0.0, null, 1, 0, 0),
                             new TripStop("krakow:mpk:stop", "Start", "Again", null, null, 2, 90_000, 90_030)));
@@ -164,6 +194,7 @@ class ScheduleGrpcEndpointTest {
 
         @Override
         public ShapeContext shape(ScheduleHash hash, String shapeId) {
+            entityReads++;
             return new ShapeContext(hash, shapeId, List.of(new GeometryPoint(0, 0, 1), new GeometryPoint(50, 20, 1)));
         }
     }

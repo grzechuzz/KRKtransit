@@ -21,6 +21,7 @@ public final class ScheduleQueries {
 
     private String requiredId(String id) {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("Entity ID is required");
+        if (id.indexOf('\0') >= 0) throw new IllegalArgumentException("Entity ID must not contain NUL");
         return id;
     }
 }

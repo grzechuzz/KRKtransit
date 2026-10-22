@@ -55,6 +55,16 @@ class SchedulePropertiesTest {
     }
 
     @Test
+    void keepsGrpcTokenUsableWithoutIncludingItInDiagnosticOutput() {
+        String token = "disposable-sensitive-token";
+        context.withPropertyValues("schedule.grpc-token=" + token).run(application -> {
+            var properties = application.getBean(ScheduleProperties.class);
+            assertThat(properties.grpcToken()).isEqualTo(token);
+            assertThat(properties.toString()).contains("grpcToken=[REDACTED]").doesNotContain(token);
+        });
+    }
+
+    @Test
     void refusesAnExplicitMigrationWithoutAnExplicitDatabaseTarget() {
         assertThatThrownBy(() -> MigrationCommand.run(Map.of()))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("SCHEDULE_DB_URL");
