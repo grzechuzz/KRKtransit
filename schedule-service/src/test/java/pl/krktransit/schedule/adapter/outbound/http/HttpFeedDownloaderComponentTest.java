@@ -198,20 +198,21 @@ class HttpFeedDownloaderComponentTest {
     @ValueSource(booleans = {false, true})
     void retriesFailedTemporaryFileDeletion(boolean retryOnNextDownload) throws Exception {
         Assumptions.assumeTrue(Files.getFileAttributeView(temporary, PosixFileAttributeView.class) != null);
-        var permissions = Files.getPosixFilePermissions(temporary);
         try (var body = new GatedResponseBody(); var downloader = downloader(Duration.ofSeconds(30), 1, 8 * 1024 * 1024)) {
+            Path directory = temporary.resolve(DownloadWorkspace.DIRECTORY_NAME);
+            var permissions = Files.getPosixFilePermissions(directory);
             server.enqueue(new MockResponse.Builder().body(body).build());
             var outcome = new CompletableFuture<ImportFailure>();
             Thread worker = downloadInBackground(downloader, outcome, new AtomicBoolean());
             try {
                 body.awaitStarted();
-                Files.setPosixFilePermissions(temporary, PosixFilePermissions.fromString("r-x------"));
-                Assumptions.assumeFalse(Files.isWritable(temporary), "Deletion must be denied for this user");
+                Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("r-x------"));
+                Assumptions.assumeFalse(Files.isWritable(directory), "Deletion must be denied for this user");
                 worker.interrupt();
                 assertThat(outcome.get(5, TimeUnit.SECONDS).kind()).isEqualTo(ImportFailure.Kind.CANCELLED);
                 assertFileCount(1);
             } finally {
-                Files.setPosixFilePermissions(temporary, permissions);
+                Files.setPosixFilePermissions(directory, permissions);
                 stopWorker(worker, body);
             }
             if (retryOnNextDownload) {
@@ -252,7 +253,9 @@ class HttpFeedDownloaderComponentTest {
     }
 
     private void assertFileCount(int expected) throws IOException {
-        try (var files = Files.list(temporary)) { assertThat(files).hasSize(expected); }
+        try (var files = Files.walk(temporary)) {
+            assertThat(files.filter(path -> path.getFileName().toString().endsWith(".zip"))).hasSize(expected);
+        }
     }
 
     private FeedConfig feed() {

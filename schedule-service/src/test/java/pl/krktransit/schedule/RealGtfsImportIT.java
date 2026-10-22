@@ -84,8 +84,8 @@ class RealGtfsImportIT {
             assertThat(runner.runCycle().outcomes()).hasSize(3).allSatisfy(outcome ->
                     assertThat(outcome.publication()).isEqualTo(PublicationOutcome.UNCHANGED));
         }
-        try (var downloads = Files.list(temporary.resolve("downloads"))) {
-            assertThat(downloads).isEmpty();
+        try (var downloads = Files.walk(temporary.resolve("downloads"))) {
+            assertThat(downloads.filter(path -> path.getFileName().toString().endsWith(".zip"))).isEmpty();
         }
     }
 
