@@ -16,19 +16,23 @@ final class DownloadWorkspace implements AutoCloseable {
 
     DownloadWorkspace(Path parent) throws IOException {
         directory = parent.resolve(DIRECTORY_NAME);
+        prepareDirectory();
+        ownership = acquireOwnership();
+        removeAbandonedDownloads();
+    }
+
+    private void prepareDirectory() throws IOException {
         Files.createDirectories(directory);
         if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Download workspace must be a directory, not a symbolic link");
         }
-        ownership = acquireOwnership();
-        removeAbandonedDownloads();
     }
 
     private FileChannel acquireOwnership() throws IOException {
         var channel = FileChannel.open(directory.resolve(".lock"), StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
         try {
-            if (channel.tryLock() == null) throw new IOException("Download workspace is already in use");
+            requireExclusiveLock(channel);
             return channel;
         } catch (IOException | OverlappingFileLockException failure) {
             channel.close();
@@ -36,17 +40,22 @@ final class DownloadWorkspace implements AutoCloseable {
         }
     }
 
+    private void requireExclusiveLock(FileChannel channel) throws IOException {
+        if (channel.tryLock() == null) {
+            throw new IOException("Download workspace is already in use");
+        }
+    }
+
     private void removeAbandonedDownloads() {
         try (var files = Files.newDirectoryStream(directory, "gtfs-*.zip")) {
-            for (Path file : files) {
-                if (Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) remove(file);
-            }
+            for (Path file : files) removeAbandonedDownload(file);
         } catch (IOException failure) {
             LOG.log(System.Logger.Level.WARNING, "Cannot scan abandoned downloads in " + directory, failure);
         }
     }
 
-    private void remove(Path file) {
+    private void removeAbandonedDownload(Path file) {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return;
         try {
             Files.deleteIfExists(file);
         } catch (IOException failure) {
