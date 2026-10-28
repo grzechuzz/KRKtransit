@@ -10,6 +10,7 @@ import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import mockwebserver3.MockResponse;
@@ -158,12 +159,14 @@ class HttpFeedFetcherComponentTest {
 
     @Test
     void limitsActiveRequestsPerHost() throws Exception {
-        try (var body = new GatedResponseBody(); var fetcher = fetcher(Duration.ofSeconds(20), 8 * 1024 * 1024, 1)) {
+        try (var workers = Executors.newVirtualThreadPerTaskExecutor();
+             var body = new GatedResponseBody();
+             var fetcher = fetcher(Duration.ofSeconds(20), 8 * 1024 * 1024, 1)) {
             server.enqueue(new MockResponse.Builder().body(body).build());
             server.enqueue(new MockResponse.Builder().body("second").build());
-            var first = CompletableFuture.supplyAsync(() -> fetcher.fetch(endpoint("/vp.pb")));
+            var first = CompletableFuture.supplyAsync(() -> fetcher.fetch(endpoint("/vp.pb")), workers);
             body.awaitStarted();
-            var second = CompletableFuture.supplyAsync(() -> fetcher.fetch(endpoint("/tu.pb")));
+            var second = CompletableFuture.supplyAsync(() -> fetcher.fetch(endpoint("/tu.pb")), workers);
 
             Thread.sleep(300);
             assertThat(server.getRequestCount()).isEqualTo(1);
