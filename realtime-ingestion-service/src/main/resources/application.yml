@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: realtime-ingestion-service
+  main:
+    web-application-type: none
+
+logging:
+  level:
+    io.lettuce: WARN
+    io.netty: WARN
+
+realtime:
+  jobs-enabled: ${REALTIME_JOBS_ENABLED:true}
+  poll-delay: 4s
+  failure-delays: [4s, 8s, 16s, 30s, 60s, 120s]
+  failure-jitter: 0.1
+  shutdown-timeout: 10s
+  report-interval: 1m
+  http:
+    connect-timeout: 10s
+    download-timeout: 30s
+    max-concurrent: 3
+    max-per-host: 3
+    max-body-bytes: 16777216
+  redis:
+    url: ${REALTIME_REDIS_URL}
+    username: ${REALTIME_REDIS_USERNAME:}
+    password: ${REALTIME_REDIS_PASSWORD:}
+    client-name: realtime-ingestion
+    stream-prefix: krktransit:realtime:observations:v1
+    connect-timeout: 10s
+    command-timeout: 10s
+    max-in-flight: 1000
+    publication-buffer-bytes: 67108864
+    recovery-delay: 5s
+    shutdown-drain: 10s
+  sources:
+    - city-id: krakow
+      source-id: mpk-bus
+      stream-max-length: 300000
+      vehicle-positions-url: https://gtfs.ztp.krakow.pl/VehiclePositions_A.pb
+      trip-updates-url: https://gtfs.ztp.krakow.pl/TripUpdates_A.pb
+    - city-id: krakow
+      source-id: mpk-tram
+      stream-max-length: 300000
+      vehicle-positions-url: https://gtfs.ztp.krakow.pl/VehiclePositions_T.pb
+      trip-updates-url: https://gtfs.ztp.krakow.pl/TripUpdates_T.pb
+    - city-id: krakow
+      source-id: mobilis-bus
+      stream-max-length: 300000
+      vehicle-positions-url: https://gtfs.ztp.krakow.pl/VehiclePositions_M.pb
+      trip-updates-url: https://gtfs.ztp.krakow.pl/TripUpdates_M.pb
