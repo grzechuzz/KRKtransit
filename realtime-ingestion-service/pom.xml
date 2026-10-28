@@ -55,6 +55,13 @@
                 <groupId>io.github.ascopes</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>pl.krktransit.realtime.ingestion.bootstrap.RealtimeIngestionApplication</mainClass>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
     <profiles>
