@@ -20,6 +20,7 @@
         <module>schedule-contracts</module>
         <module>schedule-service</module>
         <module>realtime-contracts</module>
+        <module>realtime-ingestion-service</module>
     </modules>
     <properties>
         <java.version>25</java.version>
