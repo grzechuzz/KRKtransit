@@ -19,6 +19,7 @@
         <module>schedule-core</module>
         <module>schedule-contracts</module>
         <module>schedule-service</module>
+        <module>realtime-contracts</module>
     </modules>
     <properties>
         <java.version>25</java.version>
@@ -38,6 +39,11 @@
             <dependency>
                 <groupId>pl.krktransit</groupId>
                 <artifactId>schedule-contracts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>pl.krktransit</groupId>
+                <artifactId>realtime-contracts</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
