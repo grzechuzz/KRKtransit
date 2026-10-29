@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package krktransit.stopevents.internal;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "pl.krktransit.stopevents.adapter.outbound.redis.proto";
+option java_outer_classname = "DetectorStateProto";
+
+message VehicleSnapshot {
+  string trip_id = 1;
+  string license_plate = 2;
+  int32 sequence = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  google.protobuf.Timestamp fetched_at = 5;
+}
+
+message PinSnapshot {
+  string hash = 1;
+  google.protobuf.Timestamp fetched_at = 2;
+}
+
+message ForecastSnapshot {
+  string stop_id = 1;
+  google.protobuf.Timestamp first_seen = 2;
+  google.protobuf.Timestamp last_seen = 3;
+}
+
+message TripSnapshot {
+  map<int32, ForecastSnapshot> stops = 1;
+  optional int32 last_min_sequence = 2;
+  google.protobuf.Timestamp fetched_at = 3;
+}
+
+message SavedSnapshot {
+  int32 delay_seconds = 1;
+  google.protobuf.Timestamp event_time = 2;
+}
