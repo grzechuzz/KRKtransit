@@ -39,6 +39,7 @@ dumps/
 *.sql
 !migrations/src/main/resources/db/migration/*.sql
 !schedule-service/src/main/resources/db/migration/*.sql
+!stop-events-service/src/main/resources/db/stop-events/*.sql
 *.sqlite
 *.db
 
