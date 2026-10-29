@@ -12,7 +12,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
@@ -21,6 +20,7 @@ import pl.krktransit.schedule.application.importing.ImportFailure;
 import pl.krktransit.schedule.application.importing.PublicationOutcome;
 import pl.krktransit.schedule.application.port.ScheduleWriter;
 import pl.krktransit.schedule.application.querying.LookupFailure;
+import pl.krktransit.schedule.bootstrap.MigrationCommand;
 import pl.krktransit.schedule.domain.feed.FeedId;
 import pl.krktransit.schedule.domain.schedule.Route;
 import pl.krktransit.schedule.domain.schedule.ScheduleHash;
@@ -57,8 +57,7 @@ class PostgresPublicationIT {
     @BeforeAll
     static void migrateOwnedDatabase() {
         source = POSTGRES.dataSource();
-        Flyway.configure().dataSource(source).defaultSchema("gtfs_schedule")
-                .schemas("gtfs_schedule").load().migrate();
+        MigrationCommand.migrate(source);
     }
 
     @Test
