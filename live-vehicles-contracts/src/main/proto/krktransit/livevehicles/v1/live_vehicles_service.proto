@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package krktransit.livevehicles.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "pl.krktransit.livevehicles.contracts.v1";
+option java_multiple_files = true;
+option java_outer_classname = "LiveVehiclesServiceProto";
+
+service LiveVehiclesService {
+  rpc ListVehiclePositions(ListVehiclePositionsRequest) returns (ListVehiclePositionsResponse);
+}
+
+message ListVehiclePositionsRequest {}
+
+message ListVehiclePositionsResponse {
+  repeated VehiclePosition vehicles = 1;
+  google.protobuf.Timestamp generated_at = 2;
+}
+
+message VehiclePosition {
+  optional string city_id = 1;
+  optional string source_id = 2;
+  optional string trip_id = 3;
+  optional string vehicle_id = 4;
+  optional string license_plate = 5;
+  optional double latitude = 6;
+  optional double longitude = 7;
+  optional double bearing = 8;
+  google.protobuf.Timestamp timestamp = 9;
+  google.protobuf.Timestamp fetched_at = 10;
+}
