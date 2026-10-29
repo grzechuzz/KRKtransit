@@ -13,6 +13,10 @@
     <dependencies>
         <dependency>
             <groupId>pl.krktransit</groupId>
+            <artifactId>realtime-contracts</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>pl.krktransit</groupId>
             <artifactId>schedule-contracts</artifactId>
         </dependency>
         <dependency>
