@@ -23,7 +23,7 @@ public final class MigrationCommand {
         return Flyway.configure()
                 .defaultSchema("gtfs_schedule")
                 .schemas("gtfs_schedule")
-                .locations("classpath:db/migration")
+                .locations("classpath:db/schedule")
                 .createSchemas(true)
                 .cleanDisabled(true)
                 .baselineOnMigrate(false);
