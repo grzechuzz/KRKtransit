@@ -83,7 +83,7 @@ class ScheduleConfiguration {
     @Bean(destroyMethod = "close")
     FeedDownloader feedDownloader(ScheduleProperties properties) {
         var download = properties.download();
-        var client = HttpClient.newBuilder().connectTimeout(download.connectTimeout())
+        var client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(download.connectTimeout())
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
         return new HttpFeedDownloader(client, properties.tempDirectory(), download.requestTimeout(), download.attempts(),
                 download.initialBackoff(), download.maxRetryDelay(), download.maxBytes());
