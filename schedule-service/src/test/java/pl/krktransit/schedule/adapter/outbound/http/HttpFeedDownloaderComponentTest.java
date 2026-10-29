@@ -59,7 +59,7 @@ class HttpFeedDownloaderComponentTest {
             RecordedRequest request = takeRequest();
             assertThat(request.getMethod()).isEqualTo("GET");
             assertThat(request.getTarget()).isEqualTo("/feed.zip?source=fixture");
-            assertThat(request.getHeaders().get("User-Agent")).isEqualTo("KRKTransit/1.0");
+            assertThat(request.getHeaders().get("User-Agent")).isEqualTo("KRKTransit/1.0 (krktransit.pl)");
             assertThat(server.getRequestCount()).isEqualTo(1);
             assertFileCount(1);
         }

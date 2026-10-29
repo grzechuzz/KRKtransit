@@ -102,7 +102,7 @@ public final class HttpFeedDownloader implements FeedDownloader {
 
     private HttpResponse<Path> fetch(FeedConfig feed, LimitedBodyHandler body) throws RetryableDownloadFailure {
         var request = HttpRequest.newBuilder(feed.staticUrl()).timeout(requestTimeout)
-                .header("User-Agent", "KRKTransit/1.0").GET().build();
+                .header("User-Agent", "KRKTransit/1.0 (krktransit.pl)").GET().build();
         var pending = client.sendAsync(request, body);
         try {
             return pending.get(requestTimeout.toNanos(), TimeUnit.NANOSECONDS);

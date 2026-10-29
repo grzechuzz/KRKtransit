@@ -46,12 +46,44 @@ class HttpFeedFetcherComponentTest {
         server.enqueue(new MockResponse.Builder().body(new Buffer().write(new byte[]{10, 3, 50, 46, 48})).build());
 
         try (var fetcher = fetcher(Duration.ofSeconds(5), 1024, 3)) {
-            assertThat(fetcher.fetch(endpoint("/vp.pb"))).containsExactly(10, 3, 50, 46, 48);
+            assertThat(fetcher.fetch(endpoint("/vp.pb"))).hasValueSatisfying(body -> assertThat(body).containsExactly(10, 3, 50, 46, 48));
 
             RecordedRequest request = server.takeRequest(5, TimeUnit.SECONDS);
             assertThat(request.getMethod()).isEqualTo("GET");
             assertThat(request.getTarget()).isEqualTo("/vp.pb");
-            assertThat(request.getHeaders().get("User-Agent")).isEqualTo("KRKTransit/1.0");
+            assertThat(request.getHeaders().get("User-Agent")).isEqualTo("KRKTransit/1.0 (krktransit.pl)");
+        }
+    }
+
+    @Test
+    void repeatsValidatorsAndReportsAnUnchangedFeedOn304() throws Exception {
+        server.enqueue(new MockResponse.Builder().setHeader("ETag", "\"v1\"")
+                .setHeader("Last-Modified", "Wed, 28 Oct 2026 23:54:59 GMT").body("feed").build());
+        server.enqueue(new MockResponse.Builder().code(304).build());
+
+        try (var fetcher = fetcher(Duration.ofSeconds(5), 1024, 3)) {
+            assertThat(fetcher.fetch(endpoint("/vp.pb"))).isPresent();
+            assertThat(fetcher.fetch(endpoint("/vp.pb"))).isEmpty();
+
+            assertThat(server.takeRequest(5, TimeUnit.SECONDS).getHeaders().get("If-None-Match")).isNull();
+            RecordedRequest conditional = server.takeRequest(5, TimeUnit.SECONDS);
+            assertThat(conditional.getHeaders().get("If-None-Match")).isEqualTo("\"v1\"");
+            assertThat(conditional.getHeaders().get("If-Modified-Since")).isEqualTo("Wed, 28 Oct 2026 23:54:59 GMT");
+        }
+    }
+
+    @Test
+    void forgottenValidatorsRequestTheFullFeedAgain() throws Exception {
+        server.enqueue(new MockResponse.Builder().setHeader("ETag", "\"v1\"").body("truncated").build());
+        server.enqueue(new MockResponse.Builder().setHeader("ETag", "\"v1\"").body("complete").build());
+
+        try (var fetcher = fetcher(Duration.ofSeconds(5), 1024, 3)) {
+            fetcher.fetch(endpoint("/vp.pb"));
+            fetcher.forget(endpoint("/vp.pb"));
+            assertThat(fetcher.fetch(endpoint("/vp.pb"))).isPresent();
+
+            server.takeRequest(5, TimeUnit.SECONDS);
+            assertThat(server.takeRequest(5, TimeUnit.SECONDS).getHeaders().get("If-None-Match")).isNull();
         }
     }
 
@@ -173,8 +205,8 @@ class HttpFeedFetcherComponentTest {
             assertThat(second).isNotDone();
             body.close();
 
-            assertThat(first.get(10, TimeUnit.SECONDS)).hasSize(8 * 1024 * 513);
-            assertThat(second.get(10, TimeUnit.SECONDS)).hasSize(6);
+            assertThat(first.get(10, TimeUnit.SECONDS).orElseThrow()).hasSize(8 * 1024 * 513);
+            assertThat(second.get(10, TimeUnit.SECONDS).orElseThrow()).hasSize(6);
         }
     }
 

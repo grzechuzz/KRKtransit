@@ -141,12 +141,20 @@ public final class EndpointPollers implements AutoCloseable {
     }
 
     private static void reportSuccess(Endpoint endpoint, PollResult result, int previousFailures) {
+        if (isUnchanged(result)) {
+            LOG.log(System.Logger.Level.DEBUG, "{0}: not modified", endpoint);
+            return;
+        }
         if (isRecovery(previousFailures)) {
             LOG.log(System.Logger.Level.INFO, "{0}: recovered after {1} failures, {2} observations", endpoint,
                     previousFailures, result.observations());
             return;
         }
         LOG.log(System.Logger.Level.DEBUG, "{0}: {1} observations", endpoint, result.observations());
+    }
+
+    private static boolean isUnchanged(PollResult result) {
+        return result.outcome() == PollResult.Outcome.UNCHANGED;
     }
 
     private static boolean isRecovery(int previousFailures) {

@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -70,7 +71,7 @@ class EndpointPollersTest {
         FeedFetcher fetcher = endpoint -> {
             fetches.computeIfAbsent(endpoint, ignored -> new AtomicInteger()).incrementAndGet();
             if (endpoint.equals(FAILING)) throw new FetchFailure(FetchFailure.Kind.TRANSPORT, "refused", null);
-            return new byte[0];
+            return Optional.of(new byte[0]);
         };
         pollers = pollers(fetcher, new OpenSink(), 4);
 
@@ -88,7 +89,7 @@ class EndpointPollersTest {
         var capacity = new CountDownLatch(1);
         FeedFetcher fetcher = endpoint -> {
             fetches.computeIfAbsent(endpoint, ignored -> new AtomicInteger()).incrementAndGet();
-            return new byte[0];
+            return Optional.of(new byte[0]);
         };
         ObservationSink blocked = new OpenSink() {
             @Override
@@ -111,7 +112,7 @@ class EndpointPollersTest {
                 Map.of(EntityRejection.MISSING_TIMESTAMP, 2), Map.of(EntityRejection.MISSING_VEHICLE_IDENTITY, 1));
         var polls = new AtomicInteger();
         FeedDecoder decoder = feed -> new DecodedFeed(List.of(), sequence.get(polls.getAndIncrement()));
-        var collect = new CollectEndpoint(endpoint -> new byte[0], decoder, new OpenSink(), Clock.systemUTC());
+        var collect = new CollectEndpoint(endpoint -> Optional.of(new byte[0]), decoder, new OpenSink(), Clock.systemUTC());
         pollers = new EndpointPollers(List.of(HEALTHY), collect, new OpenSink(), this::backoff, Duration.ofSeconds(5),
                 recordingSleeper(sequence.size()));
 
@@ -124,7 +125,7 @@ class EndpointPollersTest {
 
     @Test
     void closeInterruptsSleepingAndWaitingLoops() {
-        pollers = new EndpointPollers(List.of(HEALTHY, FAILING), collect(endpoint -> new byte[0], new OpenSink()),
+        pollers = new EndpointPollers(List.of(HEALTHY, FAILING), collect(endpoint -> Optional.of(new byte[0]), new OpenSink()),
                 new OpenSink(), this::backoff, Duration.ofSeconds(5));
         pollers.start((thread, failure) -> crashes.add(failure));
 

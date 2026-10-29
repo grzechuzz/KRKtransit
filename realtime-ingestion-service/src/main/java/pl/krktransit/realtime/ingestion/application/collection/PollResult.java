@@ -6,7 +6,7 @@ import java.util.Objects;
 
 public record PollResult(Outcome outcome, int observations, Map<EntityRejection, Integer> rejections,
                          FetchFailure.Kind fetchFailure, int status, Duration retryAfter, String detail) {
-    public enum Outcome { ADMITTED, OVERFLOW, FETCH_FAILED, DECODE_FAILED }
+    public enum Outcome { ADMITTED, UNCHANGED, OVERFLOW, FETCH_FAILED, DECODE_FAILED }
 
     public PollResult {
         Objects.requireNonNull(outcome, "outcome");
@@ -17,6 +17,10 @@ public record PollResult(Outcome outcome, int observations, Map<EntityRejection,
     static PollResult admitted(DecodedFeed feed) {
         return new PollResult(Outcome.ADMITTED, feed.observations().size(), feed.rejections(), null, 0,
                 Duration.ZERO, null);
+    }
+
+    static PollResult unchanged() {
+        return new PollResult(Outcome.UNCHANGED, 0, Map.of(), null, 0, Duration.ZERO, "not modified");
     }
 
     static PollResult overflow(DecodedFeed feed) {

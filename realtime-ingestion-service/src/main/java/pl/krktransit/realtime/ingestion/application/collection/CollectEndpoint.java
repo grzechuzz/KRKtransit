@@ -1,6 +1,7 @@
 package pl.krktransit.realtime.ingestion.application.collection;
 
 import java.time.Clock;
+import java.util.Optional;
 import pl.krktransit.realtime.ingestion.application.port.FeedDecoder;
 import pl.krktransit.realtime.ingestion.application.port.FeedFetcher;
 import pl.krktransit.realtime.ingestion.application.port.ObservationSink;
@@ -20,23 +21,24 @@ public final class CollectEndpoint {
     }
 
     public PollResult collect(Endpoint endpoint) {
-        FetchedFeed feed;
+        Optional<FetchedFeed> feed;
         try {
             feed = fetch(endpoint);
         } catch (FetchFailure failure) {
             if (failure.kind() == FetchFailure.Kind.CANCELLED) throw failure;
             return PollResult.fetchFailed(failure);
         }
+        if (feed.isEmpty()) return PollResult.unchanged();
         try {
-            return handOff(decoder.decode(feed));
+            return handOff(decoder.decode(feed.get()));
         } catch (DecodeFailure failure) {
+            fetcher.forget(endpoint);
             return PollResult.decodeFailed(failure);
         }
     }
 
-    private FetchedFeed fetch(Endpoint endpoint) {
-        byte[] body = fetcher.fetch(endpoint);
-        return new FetchedFeed(endpoint, clock.instant(), body);
+    private Optional<FetchedFeed> fetch(Endpoint endpoint) {
+        return fetcher.fetch(endpoint).map(body -> new FetchedFeed(endpoint, clock.instant(), body));
     }
 
     private PollResult handOff(DecodedFeed feed) {
