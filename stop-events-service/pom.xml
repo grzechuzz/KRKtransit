@@ -12,6 +12,10 @@
     <name>Stop events service</name>
     <dependencies>
         <dependency>
+            <groupId>pl.krktransit</groupId>
+            <artifactId>schedule-contracts</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
         </dependency>
