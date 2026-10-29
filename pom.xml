@@ -22,6 +22,8 @@
         <module>realtime-contracts</module>
         <module>realtime-ingestion-service</module>
         <module>stop-events-service</module>
+        <module>live-vehicles-contracts</module>
+        <module>live-vehicles-service</module>
     </modules>
     <properties>
         <java.version>25</java.version>
@@ -33,6 +35,11 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>pl.krktransit</groupId>
+                <artifactId>live-vehicles-contracts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>pl.krktransit</groupId>
                 <artifactId>schedule-core</artifactId>
