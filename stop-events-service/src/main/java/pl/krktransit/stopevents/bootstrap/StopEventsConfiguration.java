@@ -1,14 +1,17 @@
 package pl.krktransit.stopevents.bootstrap;
 
+import com.zaxxer.hikari.HikariDataSource;
 import io.grpc.ManagedChannel;
 import java.time.Clock;
 import javax.sql.DataSource;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import pl.krktransit.stopevents.adapter.inbound.stream.DetectorLoop;
 import pl.krktransit.stopevents.adapter.inbound.stream.StreamConsumer;
@@ -26,6 +29,13 @@ import pl.krktransit.stopevents.application.processing.ProcessObservationBatch;
 
 @Configuration(proxyBeanMethods = false)
 class StopEventsConfiguration {
+    @Bean
+    @Primary
+    @ConfigurationProperties("spring.datasource.hikari")
+    HikariDataSource dataSource(DataSourceProperties database) {
+        return database.initializeDataSourceBuilder().type(HikariDataSource.class).build();
+    }
+
     @Bean
     Clock stopEventsClock() { return Clock.systemUTC(); }
 

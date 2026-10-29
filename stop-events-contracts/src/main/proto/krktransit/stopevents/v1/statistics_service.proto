@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package krktransit.stopevents.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "pl.krktransit.stopevents.contracts.v1";
+option java_multiple_files = true;
+option java_outer_classname = "StatisticsServiceProto";
+
+service StatisticsService {
+  rpc GetMaxDelay(StatisticsRequest) returns (MaxDelayResponse);
+  rpc GetRouteDelay(StatisticsRequest) returns (RouteDelayResponse);
+  rpc GetPunctuality(StatisticsRequest) returns (PunctualityResponse);
+  rpc GetTrend(StatisticsRequest) returns (TrendResponse);
+}
+
+message StatisticsRequest {
+  optional string line_number = 1;
+  optional string start_date = 2;
+  optional string end_date = 3;
+  optional bool include_estimated = 4;
+}
+
+message MaxDelayResponse {
+  StatisticsRequest query = 1;
+  repeated SegmentDelay max_delay = 2;
+  optional int64 trips_analyzed = 3;
+}
+
+message SegmentDelay {
+  optional string trip_id = 1;
+  optional string service_date = 2;
+  optional string line_number = 3;
+  optional string vehicle_number = 4;
+  optional string from_stop = 5;
+  optional string to_stop = 6;
+  optional int32 from_sequence = 7;
+  optional int32 to_sequence = 8;
+  google.protobuf.Timestamp from_planned_time = 9;
+  google.protobuf.Timestamp from_event_time = 10;
+  google.protobuf.Timestamp to_planned_time = 11;
+  google.protobuf.Timestamp to_event_time = 12;
+  optional int32 delay_generated_seconds = 13;
+  optional string headsign = 14;
+  optional bool is_estimated = 15;
+}
+
+message RouteDelayResponse {
+  StatisticsRequest query = 1;
+  repeated RouteDelay max_route_delay = 2;
+  optional int64 trips_analyzed = 3;
+}
+
+message RouteDelay {
+  optional string trip_id = 1;
+  optional string service_date = 2;
+  optional string line_number = 3;
+  optional string vehicle_number = 4;
+  optional string first_stop = 5;
+  optional string last_stop = 6;
+  google.protobuf.Timestamp first_planned_time = 7;
+  google.protobuf.Timestamp first_event_time = 8;
+  google.protobuf.Timestamp last_planned_time = 9;
+  google.protobuf.Timestamp last_event_time = 10;
+  optional int32 start_delay_seconds = 11;
+  optional int32 end_delay_seconds = 12;
+  optional int32 delay_generated_seconds = 13;
+  optional string headsign = 14;
+  optional bool is_estimated = 15;
+}
+
+message PunctualityResponse {
+  StatisticsRequest query = 1;
+  optional int64 total_stops = 2;
+  optional int64 on_time_count = 3;
+  optional double on_time_percent = 4;
+  optional int64 slightly_delayed_count = 5;
+  optional double slightly_delayed_percent = 6;
+  optional int64 delayed_count = 7;
+  optional double delayed_percent = 8;
+}
+
+message TrendResponse {
+  StatisticsRequest query = 1;
+  repeated TrendDay days = 2;
+}
+
+message TrendDay {
+  optional string date = 1;
+  optional double avg_delay_seconds = 2;
+  optional int64 trips_count = 3;
+}

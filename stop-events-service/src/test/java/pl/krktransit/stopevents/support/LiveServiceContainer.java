@@ -36,10 +36,12 @@ public final class LiveServiceContainer extends GenericContainer<LiveServiceCont
         return readyLog(".*Successfully applied.*\n");
     }
 
-    public LiveServiceContainer grpcPort() {
-        withExposedPorts(9090);
+    public LiveServiceContainer grpcPort() { return grpcPort(9090); }
+
+    public LiveServiceContainer grpcPort(int port) {
+        withExposedPorts(port);
         withCreateContainerCmdModifier(command -> command.getHostConfig()
-                .withPortBindings(new PortBinding(Ports.Binding.bindIp("127.0.0.1"), ExposedPort.tcp(9090))));
+                .withPortBindings(new PortBinding(Ports.Binding.bindIp("127.0.0.1"), ExposedPort.tcp(port))));
         return this;
     }
 

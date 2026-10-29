@@ -37,6 +37,8 @@ class ArchitectureTest {
 
     @Test
     void generatedContractsStayInsideTheirAdapters() {
+        noClasses().that().resideOutsideOfPackages("..adapter.inbound.grpc..", "..contracts..")
+                .should().dependOnClassesThat().resideInAPackage("pl.krktransit.stopevents.contracts..").check(PRODUCTION);
         noClasses().that().resideOutsideOfPackage("..adapter.inbound.stream..").should().dependOnClassesThat()
                 .resideInAPackage("pl.krktransit.realtime.contracts..").check(PRODUCTION);
         noClasses().that().resideOutsideOfPackage("..adapter.outbound.schedule..").should().dependOnClassesThat()

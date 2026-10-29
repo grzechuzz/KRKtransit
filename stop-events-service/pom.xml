@@ -10,6 +10,14 @@
     <name>Stop events service</name>
     <dependencies>
         <dependency>
+            <groupId>pl.krktransit</groupId>
+            <artifactId>stop-events-contracts</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-grpc-server</artifactId>
+        </dependency>
+        <dependency>
             <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
