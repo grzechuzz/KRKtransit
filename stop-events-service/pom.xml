@@ -12,8 +12,20 @@
     <name>Stop events service</name>
     <dependencies>
         <dependency>
+            <groupId>pl.krktransit</groupId>
+            <artifactId>realtime-contracts</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>pl.krktransit</groupId>
+            <artifactId>schedule-contracts</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.protobuf</groupId>
@@ -49,6 +61,11 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-inprocess</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
