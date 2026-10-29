@@ -26,7 +26,7 @@ class RealtimeConfiguration {
     @Bean(destroyMethod = "close")
     HttpFeedFetcher feedFetcher(RealtimeProperties properties, Clock clock) {
         var http = properties.http();
-        var client = HttpClient.newBuilder().connectTimeout(http.connectTimeout())
+        var client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(http.connectTimeout())
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
         return new HttpFeedFetcher(client, http.downloadTimeout(), http.maxBodyBytes(), http.maxConcurrent(),
                 http.maxPerHost(), clock);
