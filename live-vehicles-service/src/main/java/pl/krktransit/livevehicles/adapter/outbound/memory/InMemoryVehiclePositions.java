@@ -16,9 +16,7 @@ public final class InMemoryVehiclePositions implements VehiclePositions {
     private final int maximum;
 
     public InMemoryVehiclePositions(Duration retention, int maximum) {
-        if (retention == null || !retention.isPositive() || maximum < 1) {
-            throw new IllegalArgumentException("Position retention and capacity must be positive");
-        }
+        requireValidLimits(retention, maximum);
         this.retention = retention;
         this.maximum = maximum;
     }
@@ -27,8 +25,8 @@ public final class InMemoryVehiclePositions implements VehiclePositions {
     public synchronized void accept(VehiclePosition position, Instant now) {
         if (!position.retainedAt(now, retention)) return;
         var previous = positions.get(position.key());
-        if (previous != null && !position.newerThan(previous)) return;
-        if (previous == null && positions.size() >= maximum) makeRoom(now);
+        if (outdated(position, previous)) return;
+        if (needsRoom(previous)) makeRoom(now);
         positions.put(position.key(), position);
     }
 
@@ -42,10 +40,32 @@ public final class InMemoryVehiclePositions implements VehiclePositions {
 
     private void makeRoom(Instant now) {
         expire(now);
-        if (positions.size() < maximum) return;
+        if (!atCapacity()) return;
+        evictOldest();
+    }
+
+    private void evictOldest() {
         positions.values().stream().min(Comparator.comparing(VehiclePosition::observedAt))
                 .ifPresent(oldest -> positions.remove(oldest.key()));
     }
 
+    private boolean outdated(VehiclePosition position, VehiclePosition previous) {
+        return previous != null && !position.newerThan(previous);
+    }
+
+    private boolean needsRoom(VehiclePosition previous) { return previous == null && atCapacity(); }
+
+    private boolean atCapacity() { return positions.size() >= maximum; }
+
     private void expire(Instant now) { positions.values().removeIf(position -> !position.retainedAt(now, retention)); }
+
+    private static void requireValidLimits(Duration retention, int maximum) {
+        if (!validLimits(retention, maximum)) {
+            throw new IllegalArgumentException("Position retention and capacity must be positive");
+        }
+    }
+
+    private static boolean validLimits(Duration retention, int maximum) {
+        return retention != null && retention.isPositive() && maximum > 0;
+    }
 }
