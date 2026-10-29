@@ -1,0 +1,54 @@
+package pl.krktransit.livevehicles.adapter.inbound.grpc;
+
+import com.google.protobuf.Timestamp;
+import io.grpc.stub.StreamObserver;
+import java.time.Instant;
+import pl.krktransit.livevehicles.application.LiveVehicleQueries;
+import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsRequest;
+import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
+import pl.krktransit.livevehicles.contracts.v1.LiveVehiclesServiceGrpc;
+import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
+
+public final class LiveVehiclesGrpcEndpoint extends LiveVehiclesServiceGrpc.LiveVehiclesServiceImplBase {
+    private final LiveVehicleQueries queries;
+
+    public LiveVehiclesGrpcEndpoint(LiveVehicleQueries queries) { this.queries = queries; }
+
+    @Override
+    public void listVehiclePositions(ListVehiclePositionsRequest request, StreamObserver<ListVehiclePositionsResponse> observer) {
+        var snapshot = queries.list();
+        var response = ListVehiclePositionsResponse.newBuilder().setGeneratedAt(timestamp(snapshot.generatedAt()));
+        snapshot.vehicles().forEach(vehicle -> response.addVehicles(position(vehicle)));
+        observer.onNext(response.build());
+        observer.onCompleted();
+    }
+
+    private VehiclePosition position(pl.krktransit.livevehicles.domain.VehiclePosition position) {
+        var response = VehiclePosition.newBuilder().setCityId(position.source().cityId())
+                .setSourceId(position.source().sourceId());
+        addIdentity(response, position);
+        addLocation(response, position);
+        addTimes(response, position);
+        return response.build();
+    }
+
+    private void addIdentity(VehiclePosition.Builder response, pl.krktransit.livevehicles.domain.VehiclePosition position) {
+        if (position.tripId() != null) response.setTripId(position.tripId());
+        if (position.vehicleId() != null) response.setVehicleId(position.vehicleId());
+        if (position.licensePlate() != null) response.setLicensePlate(position.licensePlate());
+    }
+
+    private void addLocation(VehiclePosition.Builder response, pl.krktransit.livevehicles.domain.VehiclePosition position) {
+        response.setLatitude(position.latitude()).setLongitude(position.longitude());
+        if (position.bearing() != null) response.setBearing(position.bearing());
+    }
+
+    private void addTimes(VehiclePosition.Builder response, pl.krktransit.livevehicles.domain.VehiclePosition position) {
+        response.setFetchedAt(timestamp(position.fetchedAt()));
+        if (position.timestamp() != null) response.setTimestamp(timestamp(position.timestamp()));
+    }
+
+    private Timestamp timestamp(Instant instant) {
+        return Timestamp.newBuilder().setSeconds(instant.getEpochSecond()).setNanos(instant.getNano()).build();
+    }
+}

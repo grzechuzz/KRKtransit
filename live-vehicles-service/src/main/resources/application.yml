@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: live-vehicles-service
+  main:
+    web-application-type: none
+  grpc:
+    server:
+      address: ${LIVE_VEHICLES_GRPC_ADDRESS:127.0.0.1}
+      port: ${LIVE_VEHICLES_GRPC_PORT:9091}
+      reflection:
+        enabled: false
+      shutdown:
+        grace-period: 10s
+
+live-vehicles:
+  jobs-enabled: ${LIVE_VEHICLES_JOBS_ENABLED:true}
+  sources:
+    - city-id: krakow
+      source-id: mpk-bus
+    - city-id: krakow
+      source-id: mobilis-bus
+    - city-id: krakow
+      source-id: mpk-tram
+  stream-prefix: ${LIVE_VEHICLES_STREAM_PREFIX:krktransit:realtime:observations:v1}
+  read-count: 500
+  read-block: 1s
+  retention: ${LIVE_VEHICLES_RETENTION:10m}
+  maximum-vehicles: ${LIVE_VEHICLES_MAXIMUM_VEHICLES:10000}
+  retry-delay: 5s
+  shutdown-timeout: 10s
+  grpc-token: ${LIVE_VEHICLES_GRPC_TOKEN:}
+  redis:
+    url: ${LIVE_VEHICLES_REDIS_URL:redis://127.0.0.1:6379}
+    username: ${LIVE_VEHICLES_REDIS_USERNAME:default}
+    password: ${LIVE_VEHICLES_REDIS_PASSWORD:}
+    client-name: live-vehicles-service
+    connect-timeout: 2s
+    command-timeout: 5s
