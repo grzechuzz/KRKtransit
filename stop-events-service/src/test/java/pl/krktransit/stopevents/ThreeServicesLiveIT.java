@@ -96,7 +96,7 @@ class ThreeServicesLiveIT {
              var ingestion = new LiveServiceContainer("realtime-ingestion-service", network, owner, ingestionEnvironment())
                         .readyLog(".*Realtime ingestion started.*\n");
              var stops = new LiveServiceContainer("stop-events-service", network, owner, stopEnvironment())
-                        .readyLog(".*Stop events detector started.*\n")) {
+                        .grpcPort(LiveStatisticsCheck.PORT).readyLog(".*Stop events detector started.*\n")) {
             try {
                 schedule.start();
                 waitForSchedules(schedule);
@@ -112,6 +112,9 @@ class ThreeServicesLiveIT {
                 assertThat(ingestion.isRunning()).isTrue();
                 assertThat(stops.isRunning()).isTrue();
                 verifyAndReport(database.dataSource(), redis, new RunTiming(startedAt, restartedAt));
+                saveLog("ingestion", ingestion);
+                ingestion.stop();
+                new LiveStatisticsCheck(database.dataSource(), redis, stops).verify(ARTIFACTS);
             } finally {
                 Files.createDirectories(ARTIFACTS);
                 saveLog("schedule", schedule);
@@ -265,7 +268,9 @@ class ThreeServicesLiveIT {
                     "+ping", "+xadd", "+hello", "+client|setname", "+client|setinfo");
             acl(connection.sync(), "stop-events", "on", ">disposable-stops", "~krktransit:stop-events:*",
                     "%R~krktransit:realtime:observations:v1:*", "+ping", "+hello", "+client|setname", "+client|setinfo",
-                    "+xread", "+xinfo|stream", "+get", "+set", "+hgetall", "+hset", "+del", "+expire", "+multi", "+exec");
+                    "+xread", "+xinfo|stream", "+get", "+set", "+hgetall", "+hset", "+del", "+expire", "+multi", "+exec",
+                    "+eval", "+time", "+hget", "+hdel", "+zscore", "+zadd", "+zrangebyscore", "+zremrangebyscore",
+                    "+zcard", "+zrange", "+zrem", "+pttl", "+pexpire");
         } finally { client.shutdown(); }
     }
 
@@ -291,6 +296,8 @@ class ThreeServicesLiveIT {
         environment.put("STOP_EVENTS_REDIS_PASSWORD", "disposable-stops");
         environment.put("STOP_EVENTS_SCHEDULE_ADDRESS", "static://schedule-service:9090");
         environment.put("STOP_EVENTS_SCHEDULE_TOKEN", "disposable-grpc-token");
+        environment.put("STOP_EVENTS_GRPC_ADDRESS", "0.0.0.0");
+        environment.put("STOP_EVENTS_GRPC_TOKEN", LiveStatisticsCheck.TOKEN);
         return environment;
     }
 

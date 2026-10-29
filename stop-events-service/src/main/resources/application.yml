@@ -14,6 +14,13 @@ spring:
   flyway:
     enabled: false
   grpc:
+    server:
+      address: ${STOP_EVENTS_GRPC_ADDRESS:127.0.0.1}
+      port: ${STOP_EVENTS_GRPC_PORT:9092}
+      reflection:
+        enabled: false
+      shutdown:
+        grace-period: 10s
     client:
       channel:
         default:
@@ -36,6 +43,15 @@ stop-events:
   inactivity: 3h
   failure-delays: [1s, 5s, 15s, 30s]
   shutdown-timeout: 30s
+  statistics:
+    read-pool-size: ${STOP_EVENTS_STATISTICS_READ_POOL_SIZE:8}
+    connection-wait: 10s
+    grpc-token: ${STOP_EVENTS_GRPC_TOKEN:}
+    cache:
+      prefix: krktransit:stop-events:statistics:v1
+      maximum-entries: ${STOP_EVENTS_STATISTICS_CACHE_MAXIMUM_ENTRIES:512}
+      maximum-entry-bytes: 65536
+      command-timeout: 500ms
   redis:
     url: ${STOP_EVENTS_REDIS_URL:redis://127.0.0.1:6379}
     username: ${STOP_EVENTS_REDIS_USERNAME:default}
