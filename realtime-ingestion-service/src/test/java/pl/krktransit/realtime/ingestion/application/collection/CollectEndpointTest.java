@@ -9,6 +9,8 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.realtime.ingestion.application.port.FeedDecoder;
 import pl.krktransit.realtime.ingestion.application.port.FeedFetcher;
@@ -27,7 +29,7 @@ class CollectEndpointTest {
     @Test
     void handsOffDecodedObservationsWithTheFetchCompletionTime() {
         var decoded = new ArrayList<FetchedFeed>();
-        var collect = new CollectEndpoint(endpoint -> new byte[]{1, 2}, feed -> {
+        var collect = new CollectEndpoint(endpoint -> Optional.of(new byte[]{1, 2}), feed -> {
             decoded.add(feed);
             return new DecodedFeed(List.of(vehicle(), vehicle()), Map.of(EntityRejection.MISSING_TIMESTAMP, 3));
         }, sink, CLOCK);
@@ -47,7 +49,7 @@ class CollectEndpointTest {
 
     @Test
     void validEmptyFeedIsASuccessfulPoll() {
-        var collect = new CollectEndpoint(endpoint -> new byte[0], EMPTY, sink, CLOCK);
+        var collect = new CollectEndpoint(endpoint -> Optional.of(new byte[0]), EMPTY, sink, CLOCK);
 
         PollResult result = collect.collect(ENDPOINT);
 
@@ -73,10 +75,38 @@ class CollectEndpointTest {
     }
 
     @Test
+    void unchangedFeedIsASuccessfulPollWithoutDecoding() {
+        FeedDecoder decoder = feed -> { throw new AssertionError("must not decode"); };
+
+        PollResult result = new CollectEndpoint(endpoint -> Optional.empty(), decoder, sink, CLOCK).collect(ENDPOINT);
+
+        assertThat(result.outcome()).isEqualTo(PollResult.Outcome.UNCHANGED);
+        assertThat(result.providerFailure()).isFalse();
+        assertThat(sink.offers).isEmpty();
+    }
+
+    @Test
+    void malformedFeedForgetsItsValidators() {
+        var forgotten = new AtomicBoolean();
+        FeedFetcher fetcher = new FeedFetcher() {
+            @Override
+            public Optional<byte[]> fetch(Endpoint endpoint) { return Optional.of(new byte[]{9}); }
+
+            @Override
+            public void forget(Endpoint endpoint) { forgotten.set(endpoint.equals(ENDPOINT)); }
+        };
+        FeedDecoder decoder = feed -> { throw new DecodeFailure("GTFS-Realtime feed header is missing"); };
+
+        new CollectEndpoint(fetcher, decoder, sink, CLOCK).collect(ENDPOINT);
+
+        assertThat(forgotten).isTrue();
+    }
+
+    @Test
     void malformedFeedPublishesNothing() {
         FeedDecoder decoder = feed -> { throw new DecodeFailure("Malformed GTFS-Realtime protobuf"); };
 
-        PollResult result = new CollectEndpoint(endpoint -> new byte[]{9}, decoder, sink, CLOCK).collect(ENDPOINT);
+        PollResult result = new CollectEndpoint(endpoint -> Optional.of(new byte[]{9}), decoder, sink, CLOCK).collect(ENDPOINT);
 
         assertThat(result.outcome()).isEqualTo(PollResult.Outcome.DECODE_FAILED);
         assertThat(result.providerFailure()).isTrue();
@@ -86,7 +116,7 @@ class CollectEndpointTest {
     @Test
     void rejectedHandOffIsReportedAsLocalOverflow() {
         sink.accept = false;
-        var collect = new CollectEndpoint(endpoint -> new byte[0], feed -> new DecodedFeed(List.of(vehicle()), Map.of()), sink, CLOCK);
+        var collect = new CollectEndpoint(endpoint -> Optional.of(new byte[0]), feed -> new DecodedFeed(List.of(vehicle()), Map.of()), sink, CLOCK);
 
         PollResult result = collect.collect(ENDPOINT);
 
