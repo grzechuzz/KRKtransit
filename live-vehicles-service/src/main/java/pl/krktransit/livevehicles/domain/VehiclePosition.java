@@ -2,16 +2,18 @@ package pl.krktransit.livevehicles.domain;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 
 public record VehiclePosition(SourceId source, String tripId, String vehicleId, String licensePlate,
                               double latitude, double longitude, Double bearing,
-                              Instant timestamp, Instant fetchedAt, StreamId streamId) {
+                              Instant timestamp, Instant fetchedAt, StreamId streamId, StopProgress progress) {
     private static final Duration TOLERATED_CLOCK_SKEW = Duration.ofMinutes(1);
 
     public VehiclePosition {
         requireIdentity(source, vehicleId, licensePlate);
         requireLocation(latitude, longitude, bearing);
         requireObservationMetadata(fetchedAt, streamId);
+        Objects.requireNonNull(progress, "Stop progress is required");
     }
 
     public VehicleKey key() {
@@ -29,10 +31,15 @@ public record VehiclePosition(SourceId source, String tripId, String vehicleId, 
     public boolean newerThan(VehiclePosition previous) {
         int observed = observedAt().compareTo(previous.observedAt());
         if (observed != 0) return observed > 0;
+        if (regressesOnSameTrip(previous)) return false;
         return newerByFetchOrStream(previous);
     }
 
     public static boolean validBearing(double value) { return withinRange(value, 0, 360); }
+
+    private boolean regressesOnSameTrip(VehiclePosition previous) {
+        return tripId != null && tripId.equals(previous.tripId) && progress.behind(previous.progress);
+    }
 
     private boolean newerByFetchOrStream(VehiclePosition previous) {
         int fetch = fetchedAt.compareTo(previous.fetchedAt);
