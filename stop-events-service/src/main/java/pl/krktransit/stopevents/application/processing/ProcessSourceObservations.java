@@ -52,18 +52,34 @@ public final class ProcessSourceObservations {
     private void processVehicle(VehicleObservation vehicle, WorkingState state) {
         if (!vehicle.eligible()) return;
         var previous = state.vehicle(vehicle.licensePlate(), vehicle.fetchedAt());
+        if (previous != null && !previous.canAdvanceTo(vehicle)) {
+            processHistoricalStop(vehicle, state);
+            return;
+        }
         if (previous != null && previous.switchesTo(vehicle.tripId())) {
             finishPrevious(vehicle, previous, state);
             previous = null;
         }
-        var trip = context(vehicle, state);
-        if (trip == null || trip.stop(vehicle.sequence()) == null) return;
-        loadSavedForDetection(vehicle, previous, trip, state);
-        diagnoseIncomplete(vehicle, trip);
+        var trip = tripForDetection(vehicle, previous, state);
+        if (trip == null) return;
         var outcome = detector.detect(vehicle, previous, trip,
                 state.forecasts(vehicle.tripId(), vehicle.fetchedAt()), state.saved());
         state.stage(outcome.events());
         if (outcome.vehicleState() != null) state.saveVehicle(outcome.vehicleState());
+    }
+
+    private void processHistoricalStop(VehicleObservation vehicle, WorkingState state) {
+        if (!vehicle.stopped()) return;
+        var trip = tripForDetection(vehicle, null, state);
+        if (trip != null) state.stage(detector.detectHistoricalStop(vehicle, trip, state.saved()));
+    }
+
+    private TripContext tripForDetection(VehicleObservation vehicle, VehicleState previous, WorkingState state) {
+        var trip = context(vehicle, state);
+        if (trip == null || trip.stop(vehicle.sequence()) == null) return null;
+        loadSavedForDetection(vehicle, previous, trip, state);
+        diagnoseIncomplete(vehicle, trip);
+        return trip;
     }
 
     private void finishPrevious(VehicleObservation vehicle, VehicleState previous, WorkingState state) {

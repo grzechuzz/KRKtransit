@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -62,11 +63,52 @@ class StatisticsQueriesTest {
             if (calls.incrementAndGet() == 1) throw new StatisticsFailure(StatisticsFailure.Kind.UNAVAILABLE, "Database down");
             return RESULT;
         };
-        try (var queries = service(reader, new MemoryCache(), 2)) {
-            assertThatThrownBy(() -> queries.get(Statistic.TREND, QUERY, new QueryCancellation()))
-                    .isInstanceOfSatisfying(StatisticsFailure.class, failure -> assertThat(failure.kind()).isEqualTo(StatisticsFailure.Kind.UNAVAILABLE));
-            assertThat(queries.get(Statistic.TREND, QUERY, new QueryCancellation())).isEqualTo(RESULT);
+        try (var queries = service(reader, new MemoryCache(), 1)) {
+            synchronized (queries) {
+                assertThatThrownBy(() -> queries.get(Statistic.TREND, QUERY, new QueryCancellation()))
+                        .isInstanceOfSatisfying(StatisticsFailure.class, failure -> assertThat(failure.kind()).isEqualTo(StatisticsFailure.Kind.UNAVAILABLE));
+                assertThat(queries.get(Statistic.TREND, QUERY, new QueryCancellation())).isEqualTo(RESULT);
+            }
             assertThat(calls).hasValue(2);
+        }
+    }
+
+    @Test
+    void retiringACompletedCalculationReleasesItsPermitExactlyOnce() throws Exception {
+        var threads = new CopyOnWriteArrayList<Thread>();
+        var workers = Executors.newThreadPerTaskExecutor(task -> {
+            var thread = Thread.ofVirtual().unstarted(task);
+            threads.add(thread);
+            return thread;
+        });
+        var calls = new AtomicInteger();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        StatisticsReader reader = (kind, query, cancellation) -> {
+            if (query.equals(QUERY) && calls.incrementAndGet() == 1) {
+                throw new StatisticsFailure(StatisticsFailure.Kind.UNAVAILABLE, "Database down");
+            }
+            if (query.lineNumber().equals("179")) { entered.countDown(); await(release); }
+            return RESULT;
+        };
+        try (var queries = new StatisticsQueries(reader, new MemoryCache(), CLOCK, workers, 1);
+             var callers = Executors.newVirtualThreadPerTaskExecutor()) {
+            synchronized (queries) {
+                assertThatThrownBy(() -> queries.get(Statistic.TREND, QUERY, new QueryCancellation()))
+                        .isInstanceOf(StatisticsFailure.class);
+                assertThat(queries.get(Statistic.TREND, QUERY, new QueryCancellation())).isEqualTo(RESULT);
+            }
+            for (var thread : List.copyOf(threads)) {
+                thread.join(5000);
+                assertThat(thread.isAlive()).isFalse();
+            }
+            var active = callers.submit(() -> queries.get(Statistic.TREND, query("179", QUERY.startDate()), new QueryCancellation()));
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> queries.get(Statistic.TREND, query("503", QUERY.startDate()), new QueryCancellation()))
+                        .isInstanceOfSatisfying(StatisticsFailure.class, failure -> assertThat(failure.kind()).isEqualTo(StatisticsFailure.Kind.BUSY));
+            } finally { release.countDown(); }
+            assertThat(active.get(5, TimeUnit.SECONDS)).isEqualTo(RESULT);
         }
     }
 
