@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static pl.krktransit.publicapi.support.FakeScheduleService.feedKey;
+import static pl.krktransit.publicapi.support.FakeScheduleService.tripKey;
 
 import com.google.protobuf.Timestamp;
 import io.grpc.Status;
@@ -24,6 +26,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import pl.krktransit.publicapi.bootstrap.PublicApiApplication;
 import pl.krktransit.publicapi.support.FakeUpstreams;
+import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
+import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
+import pl.krktransit.schedule.contracts.v1.ShapePoint;
+import pl.krktransit.schedule.contracts.v1.TripStop;
 import pl.krktransit.stopevents.contracts.v1.MaxDelayResponse;
 import pl.krktransit.stopevents.contracts.v1.PunctualityResponse;
 import pl.krktransit.stopevents.contracts.v1.RouteDelay;
@@ -34,7 +40,9 @@ import pl.krktransit.stopevents.contracts.v1.TrendResponse;
 
 @SpringBootTest(classes = PublicApiApplication.class, properties = {
         "public-api.statistics.address=in-process:public-api-http-test",
-        "public-api.statistics.token=statistics-token"})
+        "public-api.statistics.token=statistics-token",
+        "public-api.schedule.address=in-process:public-api-http-test",
+        "public-api.schedule.hash-refresh=1ms"})
 class PublicApiHttpTest {
     private static final FakeUpstreams UPSTREAMS = startUpstreams();
     private static final AtomicInteger CLIENTS = new AtomicInteger();
@@ -163,8 +171,36 @@ class PublicApiHttpTest {
                         {"detail": [{"type": "bool_parsing", "loc": ["query", "include_estimated"],
                           "msg": "Input should be a valid boolean, unable to interpret input", "input": "maybe"}]}""",
                         JsonCompareMode.STRICT));
+        call(get("/v1/trips/" + "a".repeat(129) + "/stops")).andExpect(status().isUnprocessableContent());
+        call(get("/v1/shapes/bad!id")).andExpect(status().isUnprocessableContent());
         assertThat(UPSTREAMS.statistics.lastRequest).isNull();
         assertThat(UPSTREAMS.authorizations).isEmpty();
+    }
+
+    @Test
+    void tripStopsAndShapesComeFromTheCurrentScheduleVersion() throws Exception {
+        UPSTREAMS.schedule.hashes.put(feedKey("krakow", "mpk-bus"), "hash");
+        UPSTREAMS.schedule.trips.put(tripKey("hash", "krakow:mpk-bus:1"), GetTripContextResponse.newBuilder()
+                .setTripId("krakow:mpk-bus:1").addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s1")
+                        .setStopName("Rondo").setStopDesc("01").setLatitude(50.1).setLongitude(19.9).setStopSequence(1))
+                .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s2").setStopName("Plac").setStopSequence(2)).build());
+        UPSTREAMS.schedule.shapes.put(tripKey("hash", "krakow:mpk-bus:sh1"), GetShapeResponse.newBuilder()
+                .setShapeId("krakow:mpk-bus:sh1").addPoints(ShapePoint.newBuilder().setLatitude(50.1).setLongitude(19.9)
+                        .setSequence(1)).build());
+
+        call(get("/v1/trips/krakow:mpk-bus:1/stops")).andExpect(status().isOk()).andExpect(content().json("""
+                {"trip_id": "krakow:mpk-bus:1", "stops": [
+                  {"stop_id": "krakow:mpk-bus:s1", "stop_name": "Rondo", "stop_desc": "01", "latitude": 50.1,
+                   "longitude": 19.9, "sequence": 1},
+                  {"stop_id": "krakow:mpk-bus:s2", "stop_name": "Plac", "stop_desc": null, "latitude": null,
+                   "longitude": null, "sequence": 2}]}""", JsonCompareMode.STRICT));
+        call(get("/v1/shapes/krakow:mpk-bus:sh1")).andExpect(status().isOk()).andExpect(content().json("""
+                {"shape_id": "krakow:mpk-bus:sh1", "points": [{"latitude": 50.1, "longitude": 19.9, "sequence": 1}]}""",
+                JsonCompareMode.STRICT));
+        call(get("/v1/trips/krakow:mpk-bus:missing/stops")).andExpect(status().isNotFound()).andExpect(content().json("""
+                {"error_code": "RESOURCE_NOT_FOUND", "message": "Trip 'krakow:mpk-bus:missing' not found"}""",
+                JsonCompareMode.STRICT));
+        call(get("/v1/trips/12345/stops")).andExpect(status().isNotFound());
     }
 
     @Test
