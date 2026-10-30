@@ -14,8 +14,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
+import pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
+import pl.krktransit.publicapi.application.vehicles.StopProgress;
 import pl.krktransit.publicapi.support.FakeUpstreams;
 
 class GrpcVehiclePositionsSourceTest {
@@ -47,10 +49,29 @@ class GrpcVehiclePositionsSourceTest {
 
         assertThat(positions).containsExactly(
                 new pl.krktransit.publicapi.application.vehicles.VehiclePosition(new FeedId("krakow", "mpk-bus"),
-                        "krakow:mpk-bus:1", "DN041", 0, 19.9, 0.0, OBSERVED),
+                        "krakow:mpk-bus:1", "DN041", 0, 19.9, 0.0, OBSERVED, StopProgress.NONE),
                 new pl.krktransit.publicapi.application.vehicles.VehiclePosition(new FeedId("krakow", "mpk-bus"),
-                        "krakow:mpk-bus:1", "DN002", 0, 19.9, null, OBSERVED));
+                        "krakow:mpk-bus:1", "DN002", 0, 19.9, null, OBSERVED, StopProgress.NONE));
         assertThat(upstreams.authorizations).containsExactly("Bearer vehicles-token");
+    }
+
+    @Test
+    void stopProgressIsMappedWithAbsenceAndUnrecognizedStatusesKeptApart() {
+        upstreams.liveVehicles.positions = ListVehiclePositionsResponse.newBuilder()
+                .addVehicles(complete().setCurrentStopSequence(0).setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_INCOMING_AT))
+                .addVehicles(complete().setCurrentStopSequence(4).setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT))
+                .addVehicles(complete().setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_IN_TRANSIT_TO))
+                .addVehicles(complete().setCurrentStopSequence(5).setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_UNRECOGNIZED))
+                .addVehicles(complete().setCurrentStopSequence(6).setCurrentStatusValue(99))
+                .addVehicles(complete().setCurrentStopSequence(7)).build();
+
+        assertThat(source.positions()).extracting(position -> position.progress()).containsExactly(
+                new StopProgress(0, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.INCOMING_AT),
+                new StopProgress(4, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.STOPPED_AT),
+                new StopProgress(null, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.IN_TRANSIT_TO),
+                new StopProgress(5, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNRECOGNIZED),
+                new StopProgress(6, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNRECOGNIZED),
+                new StopProgress(7, null));
     }
 
     @Test

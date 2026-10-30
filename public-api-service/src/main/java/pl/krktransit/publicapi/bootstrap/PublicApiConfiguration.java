@@ -14,6 +14,7 @@ import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
 import pl.krktransit.publicapi.application.statistics.StatisticsSource;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
+import pl.krktransit.publicapi.application.vehicles.PositionSnapshot;
 import pl.krktransit.publicapi.application.vehicles.VehiclePositionsSource;
 
 @Configuration(proxyBeanMethods = false)
@@ -45,7 +46,8 @@ class PublicApiConfiguration {
     ScheduleSource scheduleSource(ManagedChannel scheduleChannel, PublicApiProperties properties, Clock clock) {
         var settings = properties.schedule();
         var client = new GrpcScheduleSource(scheduleChannel, settings.calls(), settings.maximumConcurrentLookups());
-        return new CachedScheduleSource(client, settings.tripCacheSize(), settings.hashRefresh(), clock);
+        return new CachedScheduleSource(client, settings.tripCacheSize(), settings.tripStopsCacheSize(),
+                settings.hashRefresh(), clock);
     }
 
     @Bean
@@ -60,8 +62,12 @@ class PublicApiConfiguration {
     ScheduleLookups scheduleLookups(ScheduleSource schedule) { return new ScheduleLookups(schedule); }
 
     @Bean
-    LiveVehicles liveVehicles(VehiclePositionsSource positions, ScheduleSource schedule, PublicApiProperties properties,
-                              Clock clock) {
-        return new LiveVehicles(positions, schedule, properties.liveVehicles().snapshotLifetime(), clock);
+    PositionSnapshot positionSnapshot(VehiclePositionsSource positions, PublicApiProperties properties, Clock clock) {
+        return new PositionSnapshot(positions, properties.liveVehicles().snapshotLifetime(), clock);
+    }
+
+    @Bean
+    LiveVehicles liveVehicles(PositionSnapshot positions, ScheduleSource schedule) {
+        return new LiveVehicles(positions, schedule);
     }
 }

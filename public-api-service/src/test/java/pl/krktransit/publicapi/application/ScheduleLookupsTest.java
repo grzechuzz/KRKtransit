@@ -25,7 +25,7 @@ class ScheduleLookupsTest {
     @Test
     void readsTripStopsAndShapesFromTheCurrentVersionOfTheIdsSource() {
         schedule.hashes.put(new FeedId("krakow", "mpk-bus"), "hash");
-        var stops = new TripStops("krakow:mpk-bus:1", List.of(new TripStop("krakow:mpk-bus:s", "Rondo", null, null, null, 1)));
+        var stops = new TripStops("krakow:mpk-bus:1", List.of(new TripStop("krakow:mpk-bus:s", "Rondo", null, null, null, 1, 0, 0)));
         var shape = new Shape("krakow:mpk-bus:sh:1", List.of(new ShapePoint(50, 19, 1)));
         schedule.trips.put("hash/krakow:mpk-bus:1", stops);
         schedule.shapes.put("hash/krakow:mpk-bus:sh:1", shape);

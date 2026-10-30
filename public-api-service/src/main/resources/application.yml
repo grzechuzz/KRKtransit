@@ -39,6 +39,7 @@ public-api:
     token: ${PUBLIC_API_SCHEDULE_TOKEN:}
     deadline: 2s
     trip-cache-size: 50000
+    trip-stops-cache-size: 5000
     hash-refresh: 30s
     maximum-concurrent-lookups: 32
   live-vehicles:

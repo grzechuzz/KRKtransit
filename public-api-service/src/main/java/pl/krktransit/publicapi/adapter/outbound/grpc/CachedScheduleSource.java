@@ -23,14 +23,19 @@ public final class CachedScheduleSource implements ScheduleSource {
     private static final int MAXIMUM_FEEDS = 1000;
     private final ScheduleSource delegate;
     private final Cache<TripKey, CachedTrip> trips;
+    private final Cache<TripKey, Optional<TripStops>> tripStops;
     private final Cache<FeedId, CurrentHash> hashes = Caffeine.newBuilder().maximumSize(MAXIMUM_FEEDS).build();
     private final Duration hashRefresh;
     private final Clock clock;
 
-    public CachedScheduleSource(ScheduleSource delegate, int tripCacheSize, Duration hashRefresh, Clock clock) {
-        if (tripCacheSize <= 0 || !hashRefresh.isPositive()) throw new IllegalArgumentException("Cache limits must be positive");
+    public CachedScheduleSource(ScheduleSource delegate, int tripCacheSize, int tripStopsCacheSize, Duration hashRefresh,
+                                Clock clock) {
+        if (!validLimits(tripCacheSize, tripStopsCacheSize, hashRefresh)) {
+            throw new IllegalArgumentException("Cache limits must be positive");
+        }
         this.delegate = delegate;
         this.trips = Caffeine.newBuilder().maximumSize(tripCacheSize).build();
+        this.tripStops = Caffeine.newBuilder().maximumSize(tripStopsCacheSize).build();
         this.hashRefresh = hashRefresh;
         this.clock = clock;
     }
@@ -52,10 +57,21 @@ public final class CachedScheduleSource implements ScheduleSource {
     }
 
     @Override
-    public Optional<TripStops> tripStops(String hash, String tripId) { return delegate.tripStops(hash, tripId); }
+    public Optional<TripStops> tripStops(String hash, String tripId) {
+        var key = new TripKey(hash, tripId);
+        var cached = tripStops.getIfPresent(key);
+        if (cached != null) return cached;
+        var loaded = delegate.tripStops(hash, tripId);
+        tripStops.put(key, loaded);
+        return loaded;
+    }
 
     @Override
     public Optional<Shape> shape(String hash, String shapeId) { return delegate.shape(hash, shapeId); }
+
+    private static boolean validLimits(int tripCacheSize, int tripStopsCacheSize, Duration hashRefresh) {
+        return tripCacheSize > 0 && tripStopsCacheSize > 0 && hashRefresh.isPositive();
+    }
 
     private boolean isFresh(CurrentHash cached) {
         return cached != null && clock.instant().isBefore(cached.checkedAt().plus(hashRefresh));

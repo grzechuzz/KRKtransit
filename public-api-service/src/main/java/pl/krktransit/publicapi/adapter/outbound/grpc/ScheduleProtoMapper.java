@@ -42,7 +42,7 @@ final class ScheduleProtoMapper {
     private TripStop stop(pl.krktransit.schedule.contracts.v1.TripStop stop) {
         return new TripStop(stop.getStopId(), stop.getStopName(), stop.hasStopDesc() ? stop.getStopDesc() : null,
                 stop.hasLatitude() ? stop.getLatitude() : null, stop.hasLongitude() ? stop.getLongitude() : null,
-                stop.getStopSequence());
+                stop.getStopSequence(), stop.getArrivalSeconds(), stop.getDepartureSeconds());
     }
 
     private ShapePoint point(pl.krktransit.schedule.contracts.v1.ShapePoint point) {
