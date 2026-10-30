@@ -1,12 +1,16 @@
 package pl.krktransit.publicapi.bootstrap;
 
 import java.time.Duration;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcCallSettings;
 
 @ConfigurationProperties("public-api")
-public record PublicApiProperties(Statistics statistics, Schedule schedule, LiveVehicles liveVehicles) {
+public record PublicApiProperties(List<String> allowedOrigins, Statistics statistics, Schedule schedule,
+                                  LiveVehicles liveVehicles) {
     public PublicApiProperties {
+        allowedOrigins = List.copyOf(allowedOrigins);
+        if (allowedOrigins.isEmpty()) throw new IllegalArgumentException("At least one allowed origin is required");
         requirePresent(statistics, schedule, liveVehicles);
     }
 

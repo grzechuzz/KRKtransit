@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static pl.krktransit.publicapi.support.FakeScheduleService.feedKey;
 import static pl.krktransit.publicapi.support.FakeScheduleService.tripKey;
@@ -223,11 +224,17 @@ class PublicApiHttpTest {
     }
 
     @Test
-    void unknownRoutesAndMethodsUseFastApiBodies() throws Exception {
+    void healthCorsUnknownRoutesAndDisabledDocumentation() throws Exception {
+        call(get("/health")).andExpect(status().isOk())
+                .andExpect(content().json("{\"status\": \"healthy\"}", JsonCompareMode.STRICT));
+        call(get("/health").header("Origin", "https://krktransit.pl"))
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://krktransit.pl"));
         call(get("/v1/unknown")).andExpect(status().isNotFound())
                 .andExpect(content().json("{\"detail\": \"Not Found\"}", JsonCompareMode.STRICT));
-        call(post("/v1/lines/194/stats/trend")).andExpect(status().isMethodNotAllowed())
+        call(post("/health")).andExpect(status().isMethodNotAllowed())
                 .andExpect(content().json("{\"detail\": \"Method Not Allowed\"}", JsonCompareMode.STRICT));
+        call(get("/openapi.json")).andExpect(status().isNotFound());
+        call(get("/docs")).andExpect(status().isNotFound());
     }
 
     private ResultActions call(MockHttpServletRequestBuilder request) throws Exception {

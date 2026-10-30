@@ -19,7 +19,17 @@ server:
   forward-headers-strategy: native
   shutdown: graceful
 
+springdoc:
+  api-docs:
+    enabled: false
+    path: /openapi.json
+  swagger-ui:
+    enabled: false
+    path: /docs
+
 public-api:
+  allowed-origins:
+    - https://krktransit.pl
   statistics:
     address: ${PUBLIC_API_STATISTICS_ADDRESS:static://127.0.0.1:9092}
     token: ${PUBLIC_API_STATISTICS_TOKEN:}
