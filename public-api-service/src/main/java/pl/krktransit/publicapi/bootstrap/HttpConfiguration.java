@@ -4,7 +4,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import pl.krktransit.publicapi.adapter.inbound.http.ApiErrorAttributes;
 import pl.krktransit.publicapi.adapter.inbound.http.ApiExceptionHandler;
+import pl.krktransit.publicapi.adapter.inbound.http.ClientRateLimits;
 import pl.krktransit.publicapi.adapter.inbound.http.HealthController;
+import pl.krktransit.publicapi.adapter.inbound.http.RateLimitInterceptor;
 import pl.krktransit.publicapi.adapter.inbound.http.ShapesController;
 import pl.krktransit.publicapi.adapter.inbound.http.StatisticsController;
 import pl.krktransit.publicapi.adapter.inbound.http.TripsController;
@@ -37,5 +39,13 @@ class HttpConfiguration {
     ApiErrorAttributes errorAttributes() { return new ApiErrorAttributes(); }
 
     @Bean
-    PublicApiWebMvc publicApiWebMvc(PublicApiProperties properties) { return new PublicApiWebMvc(properties.allowedOrigins()); }
+    RateLimitInterceptor rateLimitInterceptor(PublicApiProperties properties) {
+        var limits = properties.rateLimits();
+        return new RateLimitInterceptor(new ClientRateLimits(limits.perMinuteByRoute(), limits.maximumTrackedClients()));
+    }
+
+    @Bean
+    PublicApiWebMvc publicApiWebMvc(RateLimitInterceptor rateLimits, PublicApiProperties properties) {
+        return new PublicApiWebMvc(rateLimits, properties.allowedOrigins());
+    }
 }
