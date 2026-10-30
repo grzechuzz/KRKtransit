@@ -8,6 +8,8 @@ import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsRequest;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.LiveVehiclesServiceGrpc;
 import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
+import pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus;
+import pl.krktransit.livevehicles.domain.StopProgress;
 
 public final class LiveVehiclesGrpcEndpoint extends LiveVehiclesServiceGrpc.LiveVehiclesServiceImplBase {
     private final LiveVehicleQueries queries;
@@ -29,6 +31,7 @@ public final class LiveVehiclesGrpcEndpoint extends LiveVehiclesServiceGrpc.Live
         addIdentity(response, position);
         addLocation(response, position);
         addTimes(response, position);
+        addProgress(response, position.progress());
         return response.build();
     }
 
@@ -46,6 +49,21 @@ public final class LiveVehiclesGrpcEndpoint extends LiveVehiclesServiceGrpc.Live
     private void addTimes(VehiclePosition.Builder response, pl.krktransit.livevehicles.domain.VehiclePosition position) {
         response.setFetchedAt(timestamp(position.fetchedAt()));
         if (position.timestamp() != null) response.setTimestamp(timestamp(position.timestamp()));
+    }
+
+    private void addProgress(VehiclePosition.Builder response, StopProgress progress) {
+        if (progress.stopId() != null) response.setStopId(progress.stopId());
+        if (progress.sequence() != null) response.setCurrentStopSequence(progress.sequence());
+        if (progress.status() != null) response.setCurrentStatus(status(progress.status()));
+    }
+
+    private VehicleStopStatus status(pl.krktransit.livevehicles.domain.VehicleStopStatus status) {
+        return switch (status) {
+            case INCOMING_AT -> VehicleStopStatus.VEHICLE_STOP_STATUS_INCOMING_AT;
+            case STOPPED_AT -> VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT;
+            case IN_TRANSIT_TO -> VehicleStopStatus.VEHICLE_STOP_STATUS_IN_TRANSIT_TO;
+            case UNRECOGNIZED -> VehicleStopStatus.VEHICLE_STOP_STATUS_UNRECOGNIZED;
+        };
     }
 
     private Timestamp timestamp(Instant instant) {

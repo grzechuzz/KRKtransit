@@ -10,17 +10,22 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.MetadataUtils;
+import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.livevehicles.adapter.outbound.memory.InMemoryVehiclePositions;
 import pl.krktransit.livevehicles.application.LiveVehicleQueries;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsRequest;
+import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.LiveVehiclesServiceGrpc;
 import pl.krktransit.livevehicles.domain.SourceId;
 import pl.krktransit.livevehicles.domain.StopProgress;
 import pl.krktransit.livevehicles.domain.StreamId;
 import pl.krktransit.livevehicles.domain.VehiclePosition;
+import pl.krktransit.livevehicles.domain.VehicleStopStatus;
 import pl.krktransit.livevehicles.support.MutableClock;
 
 class LiveVehiclesGrpcEndpointTest {
@@ -70,5 +75,56 @@ class LiveVehiclesGrpcEndpointTest {
             assertThat(stub.listVehiclePositions(ListVehiclePositionsRequest.getDefaultInstance()).getVehiclesList())
                     .extracting(pl.krktransit.livevehicles.contracts.v1.VehiclePosition::getVehicleId).containsExactly("vehicle");
         } finally { channel.shutdownNow(); server.shutdownNow(); }
+    }
+
+    @Test
+    void stopProgressIsReturnedWhenKnownAndLeftUnsetWhenAbsent() {
+        var now = Instant.parse("2026-10-29T12:00:00Z");
+        var positions = new InMemoryVehiclePositions(Duration.ofMinutes(10), 10);
+        var source = new SourceId("krakow", "mpk-bus");
+        positions.accept(progressing(source, "A", new StopProgress(source.scope("stop"), 0, VehicleStopStatus.INCOMING_AT), now), now);
+        positions.accept(progressing(source, "B", new StopProgress(null, null, VehicleStopStatus.STOPPED_AT), now), now);
+        positions.accept(progressing(source, "C", new StopProgress(null, 7, VehicleStopStatus.IN_TRANSIT_TO), now), now);
+        positions.accept(progressing(source, "D", new StopProgress(null, null, VehicleStopStatus.UNRECOGNIZED), now), now);
+        positions.accept(progressing(source, "E", StopProgress.NONE, now), now);
+        var vehicles = list(new LiveVehiclesGrpcEndpoint(new LiveVehicleQueries(positions, new MutableClock(now))));
+        assertThat(vehicles.get(0)).satisfies(position -> {
+            assertThat(position.getStopId()).isEqualTo("krakow:mpk-bus:stop");
+            assertThat(position.hasCurrentStopSequence()).isTrue();
+            assertThat(position.getCurrentStopSequence()).isZero();
+            assertThat(position.getCurrentStatus())
+                    .isEqualTo(pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus.VEHICLE_STOP_STATUS_INCOMING_AT);
+        });
+        assertThat(vehicles.get(1).getCurrentStatus())
+                .isEqualTo(pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT);
+        assertThat(vehicles.get(2).getCurrentStatus())
+                .isEqualTo(pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus.VEHICLE_STOP_STATUS_IN_TRANSIT_TO);
+        assertThat(vehicles.get(3).getCurrentStatus())
+                .isEqualTo(pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus.VEHICLE_STOP_STATUS_UNRECOGNIZED);
+        assertThat(vehicles.get(4)).satisfies(position -> {
+            assertThat(position.hasStopId()).isFalse();
+            assertThat(position.hasCurrentStopSequence()).isFalse();
+            assertThat(position.hasCurrentStatus()).isFalse();
+        });
+    }
+
+    private VehiclePosition progressing(SourceId source, String plate, StopProgress progress, Instant now) {
+        return new VehiclePosition(source, source.scope("trip"), null, plate, 50, 20, null, now, now,
+                StreamId.parse("1-0"), progress);
+    }
+
+    private List<pl.krktransit.livevehicles.contracts.v1.VehiclePosition> list(LiveVehiclesGrpcEndpoint endpoint) {
+        var responses = new ArrayList<ListVehiclePositionsResponse>();
+        endpoint.listVehiclePositions(ListVehiclePositionsRequest.getDefaultInstance(), new StreamObserver<>() {
+            @Override
+            public void onNext(ListVehiclePositionsResponse response) { responses.add(response); }
+
+            @Override
+            public void onError(Throwable failure) { throw new AssertionError(failure); }
+
+            @Override
+            public void onCompleted() {}
+        });
+        return responses.getFirst().getVehiclesList();
     }
 }
