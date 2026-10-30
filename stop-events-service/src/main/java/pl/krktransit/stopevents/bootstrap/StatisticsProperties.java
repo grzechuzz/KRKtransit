@@ -4,9 +4,10 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("stop-events.statistics")
-public record StatisticsProperties(int readPoolSize, Duration connectionWait, String grpcToken, Cache cache) {
+public record StatisticsProperties(int readPoolSize, int maximumCalculations, Duration connectionWait, String grpcToken,
+                                   Cache cache) {
     public StatisticsProperties {
-        requireLimits(readPoolSize);
+        requireLimits(readPoolSize, maximumCalculations);
         requireDuration(connectionWait);
         grpcToken = grpcToken == null ? "" : grpcToken;
         if (cache == null) throw new IllegalArgumentException("Statistics cache settings are required");
@@ -14,7 +15,8 @@ public record StatisticsProperties(int readPoolSize, Duration connectionWait, St
 
     @Override
     public String toString() {
-        return "StatisticsProperties[readPoolSize=" + readPoolSize + ", connectionWait=" + connectionWait + "]";
+        return "StatisticsProperties[readPoolSize=" + readPoolSize + ", maximumCalculations=" + maximumCalculations
+                + ", connectionWait=" + connectionWait + "]";
     }
 
     private static void requireLimits(int... values) {

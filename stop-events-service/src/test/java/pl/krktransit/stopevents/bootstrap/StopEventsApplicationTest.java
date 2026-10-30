@@ -28,6 +28,7 @@ class StopEventsApplicationTest {
             assertThat(writer.getMaximumPoolSize()).isEqualTo(4);
             assertThat(reader.getMaximumPoolSize()).isEqualTo(8);
             assertThat(reader.isReadOnly()).isTrue();
+            assertThat(context.getBean(StatisticsProperties.class).maximumCalculations()).isEqualTo(100);
         }
     }
 }

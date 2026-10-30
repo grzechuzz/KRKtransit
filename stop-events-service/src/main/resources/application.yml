@@ -45,6 +45,7 @@ stop-events:
   shutdown-timeout: 30s
   statistics:
     read-pool-size: ${STOP_EVENTS_STATISTICS_READ_POOL_SIZE:8}
+    maximum-calculations: ${STOP_EVENTS_STATISTICS_MAXIMUM_CALCULATIONS:100}
     connection-wait: 10s
     grpc-token: ${STOP_EVENTS_GRPC_TOKEN:}
     cache:
