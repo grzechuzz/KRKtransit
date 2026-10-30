@@ -18,6 +18,7 @@ public final class FakeUpstreams implements AutoCloseable {
             Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
     public final FakeStatisticsService statistics = new FakeStatisticsService();
     public final FakeScheduleService schedule = new FakeScheduleService();
+    public final FakeLiveVehiclesService liveVehicles = new FakeLiveVehiclesService();
     public final List<String> authorizations = new CopyOnWriteArrayList<>();
     private final String name;
     private final Server server;
@@ -27,7 +28,8 @@ public final class FakeUpstreams implements AutoCloseable {
         ServerInterceptor recordAuthorization = this::recordAuthorization;
         this.server = InProcessServerBuilder.forName(name)
                 .addService(ServerInterceptors.intercept(statistics, recordAuthorization))
-                .addService(ServerInterceptors.intercept(schedule, recordAuthorization)).build().start();
+                .addService(ServerInterceptors.intercept(schedule, recordAuthorization))
+                .addService(ServerInterceptors.intercept(liveVehicles, recordAuthorization)).build().start();
     }
 
     public static FakeUpstreams start(String name) throws IOException { return new FakeUpstreams(name); }
@@ -39,6 +41,7 @@ public final class FakeUpstreams implements AutoCloseable {
     public void reset() {
         statistics.reset();
         schedule.reset();
+        liveVehicles.reset();
         authorizations.clear();
     }
 

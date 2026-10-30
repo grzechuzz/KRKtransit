@@ -18,6 +18,10 @@
             <artifactId>schedule-contracts</artifactId>
         </dependency>
         <dependency>
+            <groupId>pl.krktransit</groupId>
+            <artifactId>live-vehicles-contracts</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>

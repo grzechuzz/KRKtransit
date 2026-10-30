@@ -7,13 +7,18 @@ import pl.krktransit.publicapi.adapter.inbound.http.ApiExceptionHandler;
 import pl.krktransit.publicapi.adapter.inbound.http.ShapesController;
 import pl.krktransit.publicapi.adapter.inbound.http.StatisticsController;
 import pl.krktransit.publicapi.adapter.inbound.http.TripsController;
+import pl.krktransit.publicapi.adapter.inbound.http.VehiclesController;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
+import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
 
 @Configuration(proxyBeanMethods = false)
 class HttpConfiguration {
     @Bean
     StatisticsController statisticsController(LineStatistics statistics) { return new StatisticsController(statistics); }
+
+    @Bean
+    VehiclesController vehiclesController(LiveVehicles vehicles) { return new VehiclesController(vehicles); }
 
     @Bean
     TripsController tripsController(ScheduleLookups schedule) { return new TripsController(schedule); }

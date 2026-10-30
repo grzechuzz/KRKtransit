@@ -8,10 +8,13 @@ import org.springframework.grpc.client.GrpcChannelFactory;
 import pl.krktransit.publicapi.adapter.outbound.grpc.CachedScheduleSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcScheduleSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcStatisticsSource;
+import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcVehiclePositionsSource;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
 import pl.krktransit.publicapi.application.statistics.StatisticsSource;
+import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
+import pl.krktransit.publicapi.application.vehicles.VehiclePositionsSource;
 
 @Configuration(proxyBeanMethods = false)
 class PublicApiConfiguration {
@@ -28,6 +31,11 @@ class PublicApiConfiguration {
         return channels.createChannel(properties.schedule().address());
     }
 
+    @Bean(destroyMethod = "shutdown")
+    ManagedChannel liveVehiclesChannel(GrpcChannelFactory channels, PublicApiProperties properties) {
+        return channels.createChannel(properties.liveVehicles().address());
+    }
+
     @Bean
     StatisticsSource statisticsSource(ManagedChannel statisticsChannel, PublicApiProperties properties) {
         return new GrpcStatisticsSource(statisticsChannel, properties.statistics().calls());
@@ -41,8 +49,19 @@ class PublicApiConfiguration {
     }
 
     @Bean
+    VehiclePositionsSource vehiclePositionsSource(ManagedChannel liveVehiclesChannel, PublicApiProperties properties) {
+        return new GrpcVehiclePositionsSource(liveVehiclesChannel, properties.liveVehicles().calls());
+    }
+
+    @Bean
     LineStatistics lineStatistics(StatisticsSource statistics) { return new LineStatistics(statistics); }
 
     @Bean
     ScheduleLookups scheduleLookups(ScheduleSource schedule) { return new ScheduleLookups(schedule); }
+
+    @Bean
+    LiveVehicles liveVehicles(VehiclePositionsSource positions, ScheduleSource schedule, PublicApiProperties properties,
+                              Clock clock) {
+        return new LiveVehicles(positions, schedule, properties.liveVehicles().snapshotLifetime(), clock);
+    }
 }
