@@ -5,9 +5,6 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,30 +16,26 @@ import pl.krktransit.publicapi.application.schedule.TripSummary;
 
 public final class LiveVehicles {
     private static final System.Logger LOG = System.getLogger(LiveVehicles.class.getName());
-    private final VehiclePositionsSource positions;
+    private final PositionSnapshot positions;
     private final ScheduleSource schedule;
-    private final Duration snapshotLifetime;
-    private final Clock clock;
-    private Snapshot snapshot;
+    private Enriched enriched;
 
-    public LiveVehicles(VehiclePositionsSource positions, ScheduleSource schedule, Duration snapshotLifetime, Clock clock) {
+    public LiveVehicles(PositionSnapshot positions, ScheduleSource schedule) {
         this.positions = positions;
         this.schedule = schedule;
-        this.snapshotLifetime = snapshotLifetime;
-        this.clock = clock;
     }
 
     public synchronized List<LiveVehicle> current() {
-        if (!isFresh(snapshot)) snapshot = new Snapshot(load(), clock.instant());
-        return snapshot.vehicles();
+        var observed = positions.current();
+        if (!isEnrichmentOf(enriched, observed)) enriched = new Enriched(observed, enrich(observed.vehicles()));
+        return enriched.vehicles();
     }
 
-    private boolean isFresh(Snapshot candidate) {
-        return candidate != null && clock.instant().isBefore(candidate.takenAt().plus(snapshotLifetime));
+    private static boolean isEnrichmentOf(Enriched candidate, PositionSnapshot.Positions observed) {
+        return candidate != null && candidate.source() == observed;
     }
 
-    private List<LiveVehicle> load() {
-        var observed = positions.positions();
+    private List<LiveVehicle> enrich(List<VehiclePosition> observed) {
         var trips = tripsByFeed(observed);
         return observed.stream().flatMap(position -> enriched(position, trips).stream()).toList();
     }
@@ -75,5 +68,5 @@ public final class LiveVehicles {
                 trip.shapeId(), position.latitude(), position.longitude(), position.bearing(), position.timestamp());
     }
 
-    private record Snapshot(List<LiveVehicle> vehicles, Instant takenAt) {}
+    private record Enriched(PositionSnapshot.Positions source, List<LiveVehicle> vehicles) {}
 }

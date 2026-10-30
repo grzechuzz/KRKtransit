@@ -13,6 +13,7 @@ import pl.krktransit.publicapi.adapter.inbound.http.TripsController;
 import pl.krktransit.publicapi.adapter.inbound.http.VehiclesController;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
+import pl.krktransit.publicapi.application.upcoming.UpcomingStops;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
 
 @Configuration(proxyBeanMethods = false)
@@ -24,7 +25,9 @@ class HttpConfiguration {
     VehiclesController vehiclesController(LiveVehicles vehicles) { return new VehiclesController(vehicles); }
 
     @Bean
-    TripsController tripsController(ScheduleLookups schedule) { return new TripsController(schedule); }
+    TripsController tripsController(ScheduleLookups schedule, UpcomingStops upcoming) {
+        return new TripsController(schedule, upcoming);
+    }
 
     @Bean
     ShapesController shapesController(ScheduleLookups schedule) { return new ShapesController(schedule); }

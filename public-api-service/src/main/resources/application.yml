@@ -39,6 +39,7 @@ public-api:
     token: ${PUBLIC_API_SCHEDULE_TOKEN:}
     deadline: 2s
     trip-cache-size: 50000
+    trip-stops-cache-size: 5000
     hash-refresh: 30s
     maximum-concurrent-lookups: 32
   live-vehicles:
@@ -61,5 +62,7 @@ public-api:
         per-minute: ${PUBLIC_API_VEHICLES_PER_MINUTE:60}
       - path: /v1/trips/{trip_id}/stops
         per-minute: ${PUBLIC_API_TRIPS_PER_MINUTE:60}
+      - path: /v1/trips/{trip_id}/upcoming-stops
+        per-minute: ${PUBLIC_API_UPCOMING_STOPS_PER_MINUTE:60}
       - path: /v1/shapes/{shape_id}
         per-minute: ${PUBLIC_API_SHAPES_PER_MINUTE:60}

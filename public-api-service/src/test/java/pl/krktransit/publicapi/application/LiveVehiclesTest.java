@@ -21,6 +21,8 @@ import pl.krktransit.publicapi.application.schedule.TripSummaries;
 import pl.krktransit.publicapi.application.schedule.TripSummary;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicle;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
+import pl.krktransit.publicapi.application.vehicles.PositionSnapshot;
+import pl.krktransit.publicapi.application.vehicles.StopProgress;
 import pl.krktransit.publicapi.application.vehicles.VehiclePosition;
 import pl.krktransit.publicapi.application.vehicles.VehiclePositionsSource;
 import pl.krktransit.publicapi.support.MutableClock;
@@ -32,7 +34,8 @@ class LiveVehiclesTest {
     private final MutableClock clock = new MutableClock(NOW);
     private final Positions positions = new Positions();
     private final Schedule schedule = new Schedule();
-    private final LiveVehicles vehicles = new LiveVehicles(positions, schedule, Duration.ofSeconds(3), clock);
+    private final PositionSnapshot snapshot = new PositionSnapshot(positions, Duration.ofSeconds(3), clock);
+    private final LiveVehicles vehicles = new LiveVehicles(snapshot, schedule);
 
     @Test
     void enrichesPositionsInObservedOrderAndOmitsTripsUnknownInTheCurrentSchedule() {
@@ -64,6 +67,36 @@ class LiveVehiclesTest {
         clock.advance(Duration.ofMillis(1));
         vehicles.current();
         assertThat(positions.calls).isEqualTo(2);
+        assertThat(schedule.requestedTrips).hasSize(2);
+    }
+
+    @Test
+    void tripLookupsShareTheRawSnapshotWithoutEnrichingTheMap() {
+        schedule.hashes.put(BUS, "bus-hash");
+        positions.current = List.of(position(BUS, "krakow:mpk-bus:1", "DN041"),
+                new VehiclePosition(BUS, "krakow:mpk-bus:1", "DN042", 50, 19, null, NOW, StopProgress.NONE),
+                position(BUS, "krakow:mpk-bus:2", "DN043"));
+
+        assertThat(snapshot.newestOnTrip("krakow:mpk-bus:1")).get().extracting(VehiclePosition::licensePlate)
+                .isEqualTo("DN042");
+        assertThat(snapshot.newestOnTrip("krakow:mpk-bus:missing")).isEmpty();
+        assertThat(schedule.requestedTrips).isEmpty();
+        vehicles.current();
+        assertThat(positions.calls).isOne();
+        assertThat(schedule.requestedTrips).hasSize(1);
+    }
+
+    @Test
+    void enrichmentFollowsEachNewRawSnapshot() {
+        schedule.hashes.put(BUS, "bus-hash");
+        schedule.trips.put("bus-hash/krakow:mpk-bus:1", new TripSummary("194", "A", null));
+        positions.current = List.of(position(BUS, "krakow:mpk-bus:1", "DN041"));
+        snapshot.current();
+        clock.advance(Duration.ofSeconds(3));
+        positions.current = List.of(position(BUS, "krakow:mpk-bus:1", "DN050"));
+
+        assertThat(vehicles.current()).extracting(LiveVehicle::licensePlate).containsExactly("DN050");
+        assertThat(positions.calls).isEqualTo(2);
     }
 
     @Test
@@ -86,7 +119,7 @@ class LiveVehiclesTest {
     }
 
     private static VehiclePosition position(FeedId feed, String tripId, String plate) {
-        return new VehiclePosition(feed, tripId, plate, 50.06, 19.94, 90.0, NOW.minusSeconds(5));
+        return new VehiclePosition(feed, tripId, plate, 50.06, 19.94, 90.0, NOW.minusSeconds(5), StopProgress.NONE);
     }
 
     private static final class Positions implements VehiclePositionsSource {

@@ -18,6 +18,7 @@ import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.schedule.Shape;
+import pl.krktransit.publicapi.application.schedule.TripStop;
 import pl.krktransit.publicapi.application.schedule.TripStops;
 import pl.krktransit.publicapi.application.schedule.TripSummaries;
 import pl.krktransit.publicapi.application.schedule.TripSummary;
@@ -28,7 +29,7 @@ class CachedScheduleSourceTest {
     private static final TripSummary SUMMARY = new TripSummary("194", "Krowodrza", null);
     private final MutableClock clock = new MutableClock(Instant.parse("2026-10-30T10:00:00Z"));
     private final Delegate delegate = new Delegate();
-    private final CachedScheduleSource cache = new CachedScheduleSource(delegate, 100, Duration.ofSeconds(30), clock);
+    private final CachedScheduleSource cache = new CachedScheduleSource(delegate, 100, 100, Duration.ofSeconds(30), clock);
 
     @Test
     void remembersFoundAndMissingTripsPerScheduleVersionButRetriesUnresolvedOnes() {
@@ -64,10 +65,32 @@ class CachedScheduleSourceTest {
                 .isInstanceOf(ApiFailure.UpstreamUnavailable.class);
     }
 
+    @Test
+    void remembersTripStopsAndTheirAbsencePerScheduleVersionButNotFailures() {
+        var stops = new TripStops("found", List.of(new TripStop("s", "Rondo", null, null, null, 1, 0, 0)));
+        delegate.stops.put("found", stops);
+
+        assertThat(cache.tripStops("hash", "found")).contains(stops);
+        assertThat(cache.tripStops("hash", "found")).contains(stops);
+        assertThat(cache.tripStops("hash", "missing")).isEmpty();
+        assertThat(cache.tripStops("hash", "missing")).isEmpty();
+        assertThat(cache.tripStops("next-hash", "found")).contains(stops);
+        delegate.stopsFailure = new ApiFailure.UpstreamUnavailable("Schedule service", null);
+        assertThatThrownBy(() -> cache.tripStops("hash", "failing")).isInstanceOf(ApiFailure.UpstreamUnavailable.class);
+        delegate.stopsFailure = null;
+        assertThat(cache.tripStops("hash", "failing")).isEmpty();
+
+        assertThat(delegate.stopRequests).containsExactly("hash/found", "hash/missing", "next-hash/found", "hash/failing",
+                "hash/failing");
+    }
+
     private static final class Delegate implements ScheduleSource {
         private final Map<String, TripSummary> found = new HashMap<>();
         private final Set<String> missing = new HashSet<>();
         private final List<Set<String>> requests = new ArrayList<>();
+        private final Map<String, TripStops> stops = new HashMap<>();
+        private final List<String> stopRequests = new ArrayList<>();
+        private ApiFailure stopsFailure;
         private String hash;
         private ApiFailure hashFailure;
 
@@ -86,7 +109,11 @@ class CachedScheduleSourceTest {
         }
 
         @Override
-        public Optional<TripStops> tripStops(String hash, String tripId) { return Optional.empty(); }
+        public Optional<TripStops> tripStops(String hash, String tripId) {
+            stopRequests.add(hash + "/" + tripId);
+            if (stopsFailure != null) throw stopsFailure;
+            return Optional.ofNullable(stops.get(tripId));
+        }
 
         @Override
         public Optional<Shape> shape(String hash, String shapeId) { return Optional.empty(); }

@@ -40,9 +40,10 @@ class GrpcScheduleSourceTest {
         upstreams.schedule.trips.put(tripKey("hash", "krakow:mpk-bus:1"), GetTripContextResponse.newBuilder()
                 .setTripId("krakow:mpk-bus:1").setLineNumber("194").setHeadsign("Krowodrza")
                 .addStops(pl.krktransit.schedule.contracts.v1.TripStop.newBuilder().setStopId("krakow:mpk-bus:s1")
-                        .setStopName("Rondo").setStopDesc("01").setLatitude(50.1).setLongitude(19.9).setStopSequence(1))
+                        .setStopName("Rondo").setStopDesc("01").setLatitude(50.1).setLongitude(19.9).setStopSequence(1)
+                        .setArrivalSeconds(0).setDepartureSeconds(30))
                 .addStops(pl.krktransit.schedule.contracts.v1.TripStop.newBuilder().setStopId("krakow:mpk-bus:s2")
-                        .setStopName("Plac").setStopSequence(2)).build());
+                        .setStopName("Plac").setStopSequence(2).setArrivalSeconds(88_500).setDepartureSeconds(88_560)).build());
         upstreams.schedule.shapes.put(tripKey("hash", "krakow:mpk-bus:sh"), GetShapeResponse.newBuilder()
                 .setShapeId("krakow:mpk-bus:sh").addPoints(pl.krktransit.schedule.contracts.v1.ShapePoint.newBuilder()
                         .setLatitude(0).setLongitude(19.5).setSequence(3)).build());
@@ -50,8 +51,8 @@ class GrpcScheduleSourceTest {
         assertThat(source.currentHash(new FeedId("krakow", "mpk-bus"))).contains("hash");
         assertThat(source.currentHash(new FeedId("krakow", "unknown"))).isEmpty();
         assertThat(source.tripStops("hash", "krakow:mpk-bus:1").orElseThrow().stops()).containsExactly(
-                new TripStop("krakow:mpk-bus:s1", "Rondo", "01", 50.1, 19.9, 1),
-                new TripStop("krakow:mpk-bus:s2", "Plac", null, null, null, 2));
+                new TripStop("krakow:mpk-bus:s1", "Rondo", "01", 50.1, 19.9, 1, 0, 30),
+                new TripStop("krakow:mpk-bus:s2", "Plac", null, null, null, 2, 88_500, 88_560));
         assertThat(source.shape("hash", "krakow:mpk-bus:sh").orElseThrow().points()).containsExactly(new ShapePoint(0, 19.5, 3));
         assertThat(source.shape("hash", "krakow:mpk-bus:missing")).isEmpty();
         assertThat(upstreams.authorizations).isNotEmpty().allMatch("Bearer schedule-token"::equals);

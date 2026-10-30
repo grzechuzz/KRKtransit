@@ -53,12 +53,12 @@ public record PublicApiProperties(List<String> allowedOrigins, Statistics statis
         public String toString() { return "Statistics[address=" + address + ", deadline=" + deadline + "]"; }
     }
 
-    public record Schedule(String address, String token, Duration deadline, int tripCacheSize, Duration hashRefresh,
-                           int maximumConcurrentLookups) {
+    public record Schedule(String address, String token, Duration deadline, int tripCacheSize, int tripStopsCacheSize,
+                           Duration hashRefresh, int maximumConcurrentLookups) {
         public Schedule {
             requireAddress(address);
             requirePositive(deadline, hashRefresh);
-            requirePositive(tripCacheSize, maximumConcurrentLookups);
+            requirePositive(tripCacheSize, tripStopsCacheSize, maximumConcurrentLookups);
         }
 
         public GrpcCallSettings calls() { return new GrpcCallSettings(token, deadline); }
