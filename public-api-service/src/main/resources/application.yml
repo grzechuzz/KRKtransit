@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: public-api-service
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  grpc:
+    client:
+      channel:
+        default:
+          ssl:
+            enabled: false
+
+server:
+  address: ${PUBLIC_API_HTTP_ADDRESS:127.0.0.1}
+  port: ${PUBLIC_API_HTTP_PORT:8000}
+  forward-headers-strategy: native
+  shutdown: graceful
+
+public-api:
+  statistics:
+    address: ${PUBLIC_API_STATISTICS_ADDRESS:static://127.0.0.1:9092}
+    token: ${PUBLIC_API_STATISTICS_TOKEN:}
+    deadline: 30s
