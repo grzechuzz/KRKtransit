@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.publicapi.application.schedule.FeedId;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
@@ -15,6 +16,7 @@ import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.ShapePoint;
 import pl.krktransit.publicapi.application.schedule.TripStop;
 import pl.krktransit.publicapi.application.schedule.TripStops;
+import pl.krktransit.publicapi.application.schedule.TripSummaries;
 
 class ScheduleLookupsTest {
     private final Schedule schedule = new Schedule();
@@ -54,6 +56,9 @@ class ScheduleLookupsTest {
 
         @Override
         public Optional<String> currentHash(FeedId feed) { return Optional.ofNullable(hashes.get(feed)); }
+
+        @Override
+        public TripSummaries tripSummaries(String hash, Set<String> tripIds) { return TripSummaries.none(); }
 
         @Override
         public Optional<TripStops> tripStops(String hash, String tripId) {

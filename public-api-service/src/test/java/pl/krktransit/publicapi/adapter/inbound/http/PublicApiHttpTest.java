@@ -24,6 +24,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
+import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
 import pl.krktransit.publicapi.bootstrap.PublicApiApplication;
 import pl.krktransit.publicapi.support.FakeUpstreams;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
@@ -42,7 +44,9 @@ import pl.krktransit.stopevents.contracts.v1.TrendResponse;
         "public-api.statistics.address=in-process:public-api-http-test",
         "public-api.statistics.token=statistics-token",
         "public-api.schedule.address=in-process:public-api-http-test",
-        "public-api.schedule.hash-refresh=1ms"})
+        "public-api.schedule.hash-refresh=1ms",
+        "public-api.live-vehicles.address=in-process:public-api-http-test",
+        "public-api.live-vehicles.snapshot-lifetime=1ms"})
 class PublicApiHttpTest {
     private static final FakeUpstreams UPSTREAMS = startUpstreams();
     private static final AtomicInteger CLIENTS = new AtomicInteger();
@@ -178,6 +182,21 @@ class PublicApiHttpTest {
     }
 
     @Test
+    void vehiclesAreEnrichedWithTheirCurrentTrips() throws Exception {
+        UPSTREAMS.schedule.hashes.put(feedKey("krakow", "mpk-bus"), "bus-hash");
+        UPSTREAMS.schedule.trips.put(tripKey("bus-hash", "krakow:mpk-bus:vehicles-1"), GetTripContextResponse.newBuilder()
+                .setLineNumber("194").setShapeId("krakow:mpk-bus:sh1").build());
+        UPSTREAMS.liveVehicles.positions = ListVehiclePositionsResponse.newBuilder()
+                .addVehicles(vehicle("krakow:mpk-bus:vehicles-1", "DN041").setBearing(90.5))
+                .addVehicles(vehicle("krakow:mpk-bus:vehicles-unknown", "DN002")).build();
+
+        call(get("/v1/vehicles/positions")).andExpect(status().isOk()).andExpect(content().json("""
+                {"count": 1, "vehicles": [{"trip_id": "krakow:mpk-bus:vehicles-1", "license_plate": "DN041",
+                  "line_number": "194", "headsign": "", "shape_id": "krakow:mpk-bus:sh1", "latitude": 50.06,
+                  "longitude": 19.94, "bearing": 90.5, "timestamp": "2026-10-30T10:00:00+00:00"}]}""", JsonCompareMode.STRICT));
+    }
+
+    @Test
     void tripStopsAndShapesComeFromTheCurrentScheduleVersion() throws Exception {
         UPSTREAMS.schedule.hashes.put(feedKey("krakow", "mpk-bus"), "hash");
         UPSTREAMS.schedule.trips.put(tripKey("hash", "krakow:mpk-bus:1"), GetTripContextResponse.newBuilder()
@@ -220,6 +239,12 @@ class PublicApiHttpTest {
             servletRequest.setRemoteAddr(address);
             return servletRequest;
         });
+    }
+
+    private static VehiclePosition.Builder vehicle(String tripId, String plate) {
+        return VehiclePosition.newBuilder().setCityId("krakow").setSourceId("mpk-bus").setTripId(tripId)
+                .setLicensePlate(plate).setLatitude(50.06).setLongitude(19.94)
+                .setTimestamp(timestamp(Instant.parse("2026-10-30T10:00:00Z")));
     }
 
     private static Timestamp timestamp(Instant time) {

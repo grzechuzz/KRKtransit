@@ -5,9 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcCallSettings;
 
 @ConfigurationProperties("public-api")
-public record PublicApiProperties(Statistics statistics, Schedule schedule) {
+public record PublicApiProperties(Statistics statistics, Schedule schedule, LiveVehicles liveVehicles) {
     public PublicApiProperties {
-        requirePresent(statistics, schedule);
+        requirePresent(statistics, schedule, liveVehicles);
     }
 
     private static void requirePresent(Object... sections) {
@@ -26,6 +26,12 @@ public record PublicApiProperties(Statistics statistics, Schedule schedule) {
         }
     }
 
+    private static void requirePositive(int... values) {
+        for (var value : values) {
+            if (value <= 0) throw new IllegalArgumentException("Limits must be positive");
+        }
+    }
+
     private static boolean isPositive(Duration value) { return value != null && value.isPositive(); }
 
     public record Statistics(String address, String token, Duration deadline) {
@@ -40,15 +46,29 @@ public record PublicApiProperties(Statistics statistics, Schedule schedule) {
         public String toString() { return "Statistics[address=" + address + ", deadline=" + deadline + "]"; }
     }
 
-    public record Schedule(String address, String token, Duration deadline, Duration hashRefresh) {
+    public record Schedule(String address, String token, Duration deadline, int tripCacheSize, Duration hashRefresh,
+                           int maximumConcurrentLookups) {
         public Schedule {
             requireAddress(address);
             requirePositive(deadline, hashRefresh);
+            requirePositive(tripCacheSize, maximumConcurrentLookups);
         }
 
         public GrpcCallSettings calls() { return new GrpcCallSettings(token, deadline); }
 
         @Override
         public String toString() { return "Schedule[address=" + address + ", deadline=" + deadline + "]"; }
+    }
+
+    public record LiveVehicles(String address, String token, Duration deadline, Duration snapshotLifetime) {
+        public LiveVehicles {
+            requireAddress(address);
+            requirePositive(deadline, snapshotLifetime);
+        }
+
+        public GrpcCallSettings calls() { return new GrpcCallSettings(token, deadline); }
+
+        @Override
+        public String toString() { return "LiveVehicles[address=" + address + ", deadline=" + deadline + "]"; }
     }
 }

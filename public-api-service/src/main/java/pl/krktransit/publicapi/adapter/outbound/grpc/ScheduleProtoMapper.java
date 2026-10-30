@@ -5,6 +5,7 @@ import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.ShapePoint;
 import pl.krktransit.publicapi.application.schedule.TripStop;
 import pl.krktransit.publicapi.application.schedule.TripStops;
+import pl.krktransit.publicapi.application.schedule.TripSummary;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashRequest;
 import pl.krktransit.schedule.contracts.v1.GetShapeRequest;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
@@ -23,6 +24,11 @@ final class ScheduleProtoMapper {
 
     GetShapeRequest shapeRequest(String hash, String shapeId) {
         return GetShapeRequest.newBuilder().setHash(hash).setShapeId(shapeId).build();
+    }
+
+    TripSummary summary(GetTripContextResponse trip) {
+        return new TripSummary(trip.getLineNumber(), trip.hasHeadsign() ? trip.getHeadsign() : null,
+                trip.hasShapeId() ? trip.getShapeId() : null);
     }
 
     TripStops tripStops(GetTripContextResponse trip) {
