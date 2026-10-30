@@ -5,9 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcCallSettings;
 
 @ConfigurationProperties("public-api")
-public record PublicApiProperties(Statistics statistics) {
+public record PublicApiProperties(Statistics statistics, Schedule schedule) {
     public PublicApiProperties {
-        requirePresent(statistics);
+        requirePresent(statistics, schedule);
     }
 
     private static void requirePresent(Object... sections) {
@@ -38,5 +38,17 @@ public record PublicApiProperties(Statistics statistics) {
 
         @Override
         public String toString() { return "Statistics[address=" + address + ", deadline=" + deadline + "]"; }
+    }
+
+    public record Schedule(String address, String token, Duration deadline, Duration hashRefresh) {
+        public Schedule {
+            requireAddress(address);
+            requirePositive(deadline, hashRefresh);
+        }
+
+        public GrpcCallSettings calls() { return new GrpcCallSettings(token, deadline); }
+
+        @Override
+        public String toString() { return "Schedule[address=" + address + ", deadline=" + deadline + "]"; }
     }
 }
