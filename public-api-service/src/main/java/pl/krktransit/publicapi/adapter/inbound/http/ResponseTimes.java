@@ -9,12 +9,15 @@ final class ResponseTimes {
     private static final ZoneId WARSAW = ZoneId.of("Europe/Warsaw");
     private static final DateTimeFormatter LOCAL = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ISO_SECONDS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final DateTimeFormatter ISO_WITH_OFFSET = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
     private static final String UTC_OFFSET = "+00:00";
     private static final int NANOS_PER_MICROSECOND = 1_000;
 
     private ResponseTimes() {}
 
     static String warsawLocal(Instant time) { return withMicroseconds(LOCAL.format(time.atZone(WARSAW)), time); }
+
+    static String warsawWithOffset(Instant time) { return ISO_WITH_OFFSET.format(time.atZone(WARSAW)); }
 
     static String utc(Instant time) {
         return withMicroseconds(ISO_SECONDS.format(time.atOffset(ZoneOffset.UTC)), time) + UTC_OFFSET;

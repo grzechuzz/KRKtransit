@@ -13,6 +13,7 @@ import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
 import pl.krktransit.publicapi.application.statistics.StatisticsSource;
+import pl.krktransit.publicapi.application.upcoming.UpcomingStops;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
 import pl.krktransit.publicapi.application.vehicles.PositionSnapshot;
 import pl.krktransit.publicapi.application.vehicles.VehiclePositionsSource;
@@ -69,5 +70,10 @@ class PublicApiConfiguration {
     @Bean
     LiveVehicles liveVehicles(PositionSnapshot positions, ScheduleSource schedule) {
         return new LiveVehicles(positions, schedule);
+    }
+
+    @Bean
+    UpcomingStops upcomingStops(PositionSnapshot positions, ScheduleLookups schedule) {
+        return new UpcomingStops(positions, schedule);
     }
 }

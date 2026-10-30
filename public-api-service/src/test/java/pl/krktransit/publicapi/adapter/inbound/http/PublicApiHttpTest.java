@@ -28,6 +28,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
+import pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus;
 import pl.krktransit.publicapi.bootstrap.PublicApiApplication;
 import pl.krktransit.publicapi.bootstrap.PublicApiProperties;
 import pl.krktransit.publicapi.support.FakeUpstreams;
@@ -226,6 +227,40 @@ class PublicApiHttpTest {
                 {"error_code": "RESOURCE_NOT_FOUND", "message": "Trip 'krakow:mpk-bus:missing' not found"}""",
                 JsonCompareMode.STRICT));
         call(get("/v1/trips/12345/stops")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void upcomingStopsCombineVehicleProgressWithTheCurrentSchedule() throws Exception {
+        UPSTREAMS.schedule.hashes.put(feedKey("krakow", "mpk-bus"), "hash");
+        UPSTREAMS.schedule.trips.put(tripKey("hash", "krakow:mpk-bus:up-1"), GetTripContextResponse.newBuilder()
+                .setTripId("krakow:mpk-bus:up-1")
+                .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s1").setStopName("Rondo").setStopSequence(1)
+                        .setArrivalSeconds(39_600).setDepartureSeconds(39_600))
+                .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s2").setStopName("Plac").setStopDesc("02")
+                        .setStopSequence(2).setArrivalSeconds(39_780).setDepartureSeconds(39_800))
+                .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s3").setStopName("Dworzec").setStopSequence(3)
+                        .setArrivalSeconds(88_500).setDepartureSeconds(88_500)).build());
+        UPSTREAMS.liveVehicles.positions = ListVehiclePositionsResponse.newBuilder()
+                .addVehicles(vehicle("krakow:mpk-bus:up-1", "DN041").setCurrentStopSequence(1)
+                        .setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT))
+                .addVehicles(vehicle("krakow:mpk-bus:up-2", "DN042").setCurrentStopSequence(1)).build();
+
+        call(get("/v1/trips/krakow:mpk-bus:up-1/upcoming-stops")).andExpect(status().isOk()).andExpect(content().json("""
+                {"trip_id": "krakow:mpk-bus:up-1", "status": "IN_PROGRESS", "observed_at": "2026-10-30T10:00:00+00:00",
+                 "stops": [
+                   {"stop_id": "krakow:mpk-bus:s2", "stop_name": "Plac", "stop_desc": "02", "sequence": 2,
+                    "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": null},
+                   {"stop_id": "krakow:mpk-bus:s3", "stop_name": "Dworzec", "stop_desc": null, "sequence": 3,
+                    "scheduled_arrival": "2026-10-31T00:35:00+01:00", "predicted_arrival": null}]}""",
+                JsonCompareMode.STRICT));
+        call(get("/v1/trips/krakow:mpk-bus:other/upcoming-stops")).andExpect(status().isNotFound()).andExpect(content().json("""
+                {"error_code": "RESOURCE_NOT_FOUND", "message": "Vehicle on trip 'krakow:mpk-bus:other' not found"}""",
+                JsonCompareMode.STRICT));
+        call(get("/v1/trips/bad%20id/upcoming-stops")).andExpect(status().isUnprocessableContent());
+
+        UPSTREAMS.schedule.failure = Status.UNAVAILABLE;
+        call(get("/v1/trips/krakow:mpk-bus:up-1/upcoming-stops")).andExpect(status().isOk());
+        call(get("/v1/trips/krakow:mpk-bus:up-2/upcoming-stops")).andExpect(status().isBadGateway());
     }
 
     @Test

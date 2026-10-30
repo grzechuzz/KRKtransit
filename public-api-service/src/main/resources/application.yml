@@ -62,5 +62,7 @@ public-api:
         per-minute: ${PUBLIC_API_VEHICLES_PER_MINUTE:60}
       - path: /v1/trips/{trip_id}/stops
         per-minute: ${PUBLIC_API_TRIPS_PER_MINUTE:60}
+      - path: /v1/trips/{trip_id}/upcoming-stops
+        per-minute: ${PUBLIC_API_UPCOMING_STOPS_PER_MINUTE:60}
       - path: /v1/shapes/{shape_id}
         per-minute: ${PUBLIC_API_SHAPES_PER_MINUTE:60}
