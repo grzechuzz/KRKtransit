@@ -18,6 +18,7 @@ import pl.krktransit.livevehicles.application.LiveVehicleQueries;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsRequest;
 import pl.krktransit.livevehicles.contracts.v1.LiveVehiclesServiceGrpc;
 import pl.krktransit.livevehicles.domain.SourceId;
+import pl.krktransit.livevehicles.domain.StopProgress;
 import pl.krktransit.livevehicles.domain.StreamId;
 import pl.krktransit.livevehicles.domain.VehiclePosition;
 import pl.krktransit.livevehicles.support.MutableClock;
@@ -30,8 +31,8 @@ class LiveVehiclesGrpcEndpointTest {
         var positions = new InMemoryVehiclePositions(Duration.ofMinutes(10), 10);
         var source = new SourceId("krakow", "mpk-bus");
         positions.accept(new VehiclePosition(source, source.scope("trip"), null, "A", 0, 0, null,
-                now.minusSeconds(300), now, StreamId.parse("1-0")), now);
-        positions.accept(new VehiclePosition(source, null, "vehicle", null, 50, 20, 0.0, null, now, StreamId.parse("2-0")), now);
+                now.minusSeconds(300), now, StreamId.parse("1-0"), StopProgress.NONE), now);
+        positions.accept(new VehiclePosition(source, null, "vehicle", null, 50, 20, 0.0, null, now, StreamId.parse("2-0"), StopProgress.NONE), now);
         var queries = new LiveVehicleQueries(positions, clock);
         String name = InProcessServerBuilder.generateName();
         var server = InProcessServerBuilder.forName(name).directExecutor().addService(ServerInterceptors.intercept(

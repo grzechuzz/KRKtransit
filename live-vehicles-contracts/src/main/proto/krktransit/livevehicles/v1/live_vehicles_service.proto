@@ -30,4 +30,15 @@ message VehiclePosition {
   optional double bearing = 8;
   google.protobuf.Timestamp timestamp = 9;
   google.protobuf.Timestamp fetched_at = 10;
+  optional string stop_id = 11;
+  optional uint32 current_stop_sequence = 12;
+  optional VehicleStopStatus current_status = 13;
+}
+
+enum VehicleStopStatus {
+  VEHICLE_STOP_STATUS_UNSPECIFIED = 0;
+  VEHICLE_STOP_STATUS_INCOMING_AT = 1;
+  VEHICLE_STOP_STATUS_STOPPED_AT = 2;
+  VEHICLE_STOP_STATUS_IN_TRANSIT_TO = 3;
+  VEHICLE_STOP_STATUS_UNRECOGNIZED = 4;
 }

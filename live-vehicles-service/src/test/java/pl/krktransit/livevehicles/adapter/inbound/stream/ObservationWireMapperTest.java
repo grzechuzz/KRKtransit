@@ -7,6 +7,8 @@ import com.google.protobuf.Timestamp;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.livevehicles.domain.SourceId;
+import pl.krktransit.livevehicles.domain.StopProgress;
+import pl.krktransit.livevehicles.domain.VehicleStopStatus;
 import pl.krktransit.realtime.contracts.v1.Observation;
 import pl.krktransit.realtime.contracts.v1.Position;
 import pl.krktransit.realtime.contracts.v1.Source;
@@ -45,6 +47,32 @@ class ObservationWireMapperTest {
     }
 
     @Test
+    void stopProgressIsCopiedWithScopedStopIdAndZeroValuesPreserved() throws Exception {
+        var observation = envelope().setVehiclePosition(vehicle().setStopId(" 0042 ").setCurrentStopSequence(0)
+                .setCurrentStatus(0)).build();
+        assertThat(mapper.decode(SOURCE, "123-1", observation.toByteArray())).get().satisfies(position ->
+                assertThat(position.progress()).isEqualTo(
+                        new StopProgress("krakow:mpk-bus: 0042 ", 0, VehicleStopStatus.INCOMING_AT)));
+    }
+
+    @Test
+    void absentProgressStaysAbsentAndBlankStopIdsAreDropped() throws Exception {
+        assertThat(mapper.decode(SOURCE, "123-1", envelope().setVehiclePosition(vehicle()).build().toByteArray())).get()
+                .satisfies(position -> assertThat(position.progress()).isEqualTo(StopProgress.NONE));
+        assertThat(mapper.decode(SOURCE, "123-1", envelope().setVehiclePosition(vehicle().setStopId(" ")
+                .setCurrentStopSequence(12)).build().toByteArray())).get().satisfies(position ->
+                assertThat(position.progress()).isEqualTo(new StopProgress(null, 12, null)));
+    }
+
+    @Test
+    void knownStatusCodesAreMappedAndOtherPresentCodesAreUnrecognized() throws Exception {
+        assertThat(status(1)).isEqualTo(VehicleStopStatus.STOPPED_AT);
+        assertThat(status(2)).isEqualTo(VehicleStopStatus.IN_TRANSIT_TO);
+        assertThat(status(7)).isEqualTo(VehicleStopStatus.UNRECOGNIZED);
+        assertThat(status(-1)).isEqualTo(VehicleStopStatus.UNRECOGNIZED);
+    }
+
+    @Test
     void tripUpdatesAndPositionsWithoutCoordinatesOrIdentityAreIgnored() throws Exception {
         assertThat(mapper.decode(SOURCE, "123-1", envelope().setTripUpdate(TripUpdate.newBuilder()).build().toByteArray())).isEmpty();
         assertThat(mapper.decode(SOURCE, "123-1", envelope().setVehiclePosition(vehicle().clearPosition()).build().toByteArray())).isEmpty();
@@ -65,6 +93,11 @@ class ObservationWireMapperTest {
         assertThatThrownBy(() -> mapper.decode(SOURCE, "123-1", envelope().setVehiclePosition(vehicle())
                 .setFetchedAt(Timestamp.newBuilder().setSeconds(100).setNanos(-1)).build().toByteArray()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private VehicleStopStatus status(int code) throws Exception {
+        var observation = envelope().setVehiclePosition(vehicle().setCurrentStatus(code)).build();
+        return mapper.decode(SOURCE, "123-1", observation.toByteArray()).orElseThrow().progress().status();
     }
 
     private Observation.Builder envelope() {

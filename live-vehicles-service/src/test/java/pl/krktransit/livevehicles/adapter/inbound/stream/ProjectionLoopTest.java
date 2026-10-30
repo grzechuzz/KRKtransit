@@ -17,6 +17,7 @@ import pl.krktransit.livevehicles.adapter.outbound.memory.InMemoryVehiclePositio
 import pl.krktransit.livevehicles.application.ObservationFailure;
 import pl.krktransit.livevehicles.application.ObservationSource;
 import pl.krktransit.livevehicles.domain.SourceId;
+import pl.krktransit.livevehicles.domain.StopProgress;
 import pl.krktransit.livevehicles.domain.StreamId;
 import pl.krktransit.livevehicles.domain.VehiclePosition;
 
@@ -31,9 +32,9 @@ class ProjectionLoopTest {
         try (var loop = new ProjectionLoop(input, positions, Set.of(source), Duration.ofMinutes(10),
                 Duration.ofMillis(1), Duration.ofSeconds(2), Clock.fixed(now, java.time.ZoneOffset.UTC))) {
             var first = new VehiclePosition(source, source.scope("trip"), null, "A", 50, 20, null,
-                    now.minusSeconds(1), now.minusSeconds(1), StreamId.parse("20-0"));
+                    now.minusSeconds(1), now.minusSeconds(1), StreamId.parse("20-0"), StopProgress.NONE);
             var second = new VehiclePosition(source, source.scope("trip"), null, "A", 51, 21, null,
-                    now, now, StreamId.parse("60-0"));
+                    now, now, StreamId.parse("60-0"), StopProgress.NONE);
             input.results.add(new ObservationSource.ReadBatch(Map.of(source, "20-0"), List.of(first)));
             input.results.add(new ObservationFailure("disconnected", null));
             input.results.add(new ObservationSource.ReadBatch(Map.of(source, "60-0"), List.of(second)));
