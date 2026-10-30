@@ -35,7 +35,8 @@ final class VehicleProtoMapper {
     }
 
     private StopProgress progress(pl.krktransit.livevehicles.contracts.v1.VehiclePosition vehicle) {
-        return new StopProgress(sequence(vehicle), vehicle.hasCurrentStatus() ? status(vehicle.getCurrentStatus()) : null);
+        return new StopProgress(hasText(vehicle.hasStopId(), vehicle.getStopId()) ? vehicle.getStopId() : null,
+                sequence(vehicle), vehicle.hasCurrentStatus() ? status(vehicle.getCurrentStatus()) : null);
     }
 
     private Integer sequence(pl.krktransit.livevehicles.contracts.v1.VehiclePosition vehicle) {

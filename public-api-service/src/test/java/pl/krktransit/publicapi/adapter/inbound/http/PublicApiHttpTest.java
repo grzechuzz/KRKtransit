@@ -241,8 +241,8 @@ class PublicApiHttpTest {
                 .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s3").setStopName("Dworzec").setStopSequence(3)
                         .setArrivalSeconds(88_500).setDepartureSeconds(88_500)).build());
         UPSTREAMS.liveVehicles.positions = ListVehiclePositionsResponse.newBuilder()
-                .addVehicles(vehicle("krakow:mpk-bus:up-1", "DN041").setCurrentStopSequence(1)
-                        .setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT))
+                .addVehicles(vehicle("krakow:mpk-bus:up-1", "DN041").setStopId("krakow:mpk-bus:s2").setCurrentStopSequence(1)
+                        .setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_IN_TRANSIT_TO))
                 .addVehicles(vehicle("krakow:mpk-bus:up-2", "DN042").setCurrentStopSequence(1)).build();
 
         call(get("/v1/trips/krakow:mpk-bus:up-1/upcoming-stops")).andExpect(status().isOk()).andExpect(content().json("""

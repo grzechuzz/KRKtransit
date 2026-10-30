@@ -58,20 +58,22 @@ class GrpcVehiclePositionsSourceTest {
     @Test
     void stopProgressIsMappedWithAbsenceAndUnrecognizedStatusesKeptApart() {
         upstreams.liveVehicles.positions = ListVehiclePositionsResponse.newBuilder()
-                .addVehicles(complete().setCurrentStopSequence(0).setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_INCOMING_AT))
-                .addVehicles(complete().setCurrentStopSequence(4).setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT))
+                .addVehicles(complete().setStopId("krakow:mpk-bus:s1").setCurrentStopSequence(0)
+                        .setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_INCOMING_AT))
+                .addVehicles(complete().setStopId(" ").setCurrentStopSequence(4)
+                        .setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_STOPPED_AT))
                 .addVehicles(complete().setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_IN_TRANSIT_TO))
                 .addVehicles(complete().setCurrentStopSequence(5).setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_UNRECOGNIZED))
                 .addVehicles(complete().setCurrentStopSequence(6).setCurrentStatusValue(99))
                 .addVehicles(complete().setCurrentStopSequence(7)).build();
 
         assertThat(source.positions()).extracting(position -> position.progress()).containsExactly(
-                new StopProgress(0, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.INCOMING_AT),
-                new StopProgress(4, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.STOPPED_AT),
-                new StopProgress(null, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.IN_TRANSIT_TO),
-                new StopProgress(5, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNRECOGNIZED),
-                new StopProgress(6, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNRECOGNIZED),
-                new StopProgress(7, null));
+                new StopProgress("krakow:mpk-bus:s1", 0, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.INCOMING_AT),
+                new StopProgress(null, 4, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.STOPPED_AT),
+                new StopProgress(null, null, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.IN_TRANSIT_TO),
+                new StopProgress(null, 5, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNRECOGNIZED),
+                new StopProgress(null, 6, pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNRECOGNIZED),
+                new StopProgress(null, 7, null));
     }
 
     @Test
