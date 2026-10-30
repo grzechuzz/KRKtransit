@@ -46,7 +46,7 @@ class StatisticsConfiguration {
                                         RedisStatisticsCache cache, Clock clock, StopEventsProperties stopEvents,
                                         StatisticsProperties properties) {
         return new StatisticsQueries(new JdbcStatisticsReader(source, stopEvents.sourceIds()), cache, clock,
-                Executors.newVirtualThreadPerTaskExecutor(), properties.readPoolSize());
+                Executors.newVirtualThreadPerTaskExecutor(), properties.maximumCalculations());
     }
 
     @Bean
