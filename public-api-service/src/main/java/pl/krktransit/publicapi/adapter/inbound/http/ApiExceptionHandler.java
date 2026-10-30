@@ -21,6 +21,7 @@ import pl.krktransit.publicapi.application.ApiFailure;
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private static final System.Logger LOG = System.getLogger(ApiExceptionHandler.class.getName());
     private static final ErrorResponse INTERNAL_ERROR = new ErrorResponse("INTERNAL_ERROR", "Internal server error");
+    private static final ErrorResponse RATE_LIMITED = new ErrorResponse("RATE_LIMIT_EXCEEDED", "Rate limit exceeded");
 
     @ExceptionHandler(ApiFailure.class)
     public ResponseEntity<ErrorResponse> apiFailure(ApiFailure failure) {
@@ -31,6 +32,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             case ApiFailure.UpstreamBusy busy -> upstreamFailure(HttpStatus.SERVICE_UNAVAILABLE, busy);
             case ApiFailure.UpstreamRejected rejected -> internalError(rejected);
         };
+    }
+
+    @ExceptionHandler(RateLimitExceeded.class)
+    public ResponseEntity<ErrorResponse> rateLimitExceeded() {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(RATE_LIMITED);
     }
 
     @Override

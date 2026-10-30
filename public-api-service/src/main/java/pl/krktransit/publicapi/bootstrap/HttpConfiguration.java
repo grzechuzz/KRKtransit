@@ -4,6 +4,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import pl.krktransit.publicapi.adapter.inbound.http.ApiErrorAttributes;
 import pl.krktransit.publicapi.adapter.inbound.http.ApiExceptionHandler;
+import pl.krktransit.publicapi.adapter.inbound.http.ClientRateLimits;
+import pl.krktransit.publicapi.adapter.inbound.http.HealthController;
+import pl.krktransit.publicapi.adapter.inbound.http.RateLimitInterceptor;
 import pl.krktransit.publicapi.adapter.inbound.http.ShapesController;
 import pl.krktransit.publicapi.adapter.inbound.http.StatisticsController;
 import pl.krktransit.publicapi.adapter.inbound.http.TripsController;
@@ -27,8 +30,22 @@ class HttpConfiguration {
     ShapesController shapesController(ScheduleLookups schedule) { return new ShapesController(schedule); }
 
     @Bean
+    HealthController healthController() { return new HealthController(); }
+
+    @Bean
     ApiExceptionHandler apiExceptionHandler() { return new ApiExceptionHandler(); }
 
     @Bean
     ApiErrorAttributes errorAttributes() { return new ApiErrorAttributes(); }
+
+    @Bean
+    RateLimitInterceptor rateLimitInterceptor(PublicApiProperties properties) {
+        var limits = properties.rateLimits();
+        return new RateLimitInterceptor(new ClientRateLimits(limits.perMinuteByRoute(), limits.maximumTrackedClients()));
+    }
+
+    @Bean
+    PublicApiWebMvc publicApiWebMvc(RateLimitInterceptor rateLimits, PublicApiProperties properties) {
+        return new PublicApiWebMvc(rateLimits, properties.allowedOrigins());
+    }
 }

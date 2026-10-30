@@ -1,13 +1,20 @@
 package pl.krktransit.publicapi.bootstrap;
 
+import static java.util.stream.Collectors.toUnmodifiableMap;
+
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcCallSettings;
 
 @ConfigurationProperties("public-api")
-public record PublicApiProperties(Statistics statistics, Schedule schedule, LiveVehicles liveVehicles) {
+public record PublicApiProperties(List<String> allowedOrigins, Statistics statistics, Schedule schedule,
+                                  LiveVehicles liveVehicles, RateLimits rateLimits) {
     public PublicApiProperties {
-        requirePresent(statistics, schedule, liveVehicles);
+        allowedOrigins = List.copyOf(allowedOrigins);
+        if (allowedOrigins.isEmpty()) throw new IllegalArgumentException("At least one allowed origin is required");
+        requirePresent(statistics, schedule, liveVehicles, rateLimits);
     }
 
     private static void requirePresent(Object... sections) {
@@ -70,5 +77,30 @@ public record PublicApiProperties(Statistics statistics, Schedule schedule, Live
 
         @Override
         public String toString() { return "LiveVehicles[address=" + address + ", deadline=" + deadline + "]"; }
+    }
+
+    public record RateLimits(int maximumTrackedClients, List<Route> routes) {
+        public RateLimits {
+            routes = List.copyOf(routes);
+            requirePositive(maximumTrackedClients);
+            requireUniqueRoutes(routes);
+        }
+
+        public Map<String, Integer> perMinuteByRoute() {
+            return routes.stream().collect(toUnmodifiableMap(Route::path, Route::perMinute));
+        }
+
+        private static void requireUniqueRoutes(List<Route> routes) {
+            if (routes.stream().map(Route::path).distinct().count() != routes.size()) {
+                throw new IllegalArgumentException("Rate-limited routes must be unique");
+            }
+        }
+    }
+
+    public record Route(String path, int perMinute) {
+        public Route {
+            if (path == null || !path.startsWith("/")) throw new IllegalArgumentException("Route paths must start with /");
+            requirePositive(perMinute);
+        }
     }
 }

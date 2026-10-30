@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static pl.krktransit.publicapi.support.FakeScheduleService.feedKey;
 import static pl.krktransit.publicapi.support.FakeScheduleService.tripKey;
@@ -24,9 +25,11 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
 import pl.krktransit.publicapi.bootstrap.PublicApiApplication;
+import pl.krktransit.publicapi.bootstrap.PublicApiProperties;
 import pl.krktransit.publicapi.support.FakeUpstreams;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
 import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
@@ -46,7 +49,8 @@ import pl.krktransit.stopevents.contracts.v1.TrendResponse;
         "public-api.schedule.address=in-process:public-api-http-test",
         "public-api.schedule.hash-refresh=1ms",
         "public-api.live-vehicles.address=in-process:public-api-http-test",
-        "public-api.live-vehicles.snapshot-lifetime=1ms"})
+        "public-api.live-vehicles.snapshot-lifetime=1ms",
+        "PUBLIC_API_SHAPES_PER_MINUTE=2"})
 class PublicApiHttpTest {
     private static final FakeUpstreams UPSTREAMS = startUpstreams();
     private static final AtomicInteger CLIENTS = new AtomicInteger();
@@ -54,6 +58,8 @@ class PublicApiHttpTest {
     private static final Instant PLANNED = Instant.parse("2026-10-01T12:00:00Z");
     @Autowired
     private WebApplicationContext context;
+    @Autowired
+    private PublicApiProperties properties;
     private MockMvc mvc;
     private String client;
 
@@ -223,11 +229,32 @@ class PublicApiHttpTest {
     }
 
     @Test
-    void unknownRoutesAndMethodsUseFastApiBodies() throws Exception {
+    void rateLimitsCountEachClientAndRouteSeparately() throws Exception {
+        UPSTREAMS.schedule.hashes.put(feedKey("krakow", "mpk-bus"), "hash");
+
+        call(get("/v1/shapes/krakow:mpk-bus:a")).andExpect(status().isNotFound());
+        call(get("/v1/shapes/krakow:mpk-bus:b")).andExpect(status().isNotFound());
+        call(get("/v1/shapes/krakow:mpk-bus:c")).andExpect(status().isTooManyRequests()).andExpect(content().json("""
+                {"error_code": "RATE_LIMIT_EXCEEDED", "message": "Rate limit exceeded"}""", JsonCompareMode.STRICT));
+        call(get("/v1/trips/krakow:mpk-bus:a/stops")).andExpect(status().isNotFound());
+        mvc.perform(withClient(get("/v1/shapes/krakow:mpk-bus:a"), "203.0.113.1")).andExpect(status().isNotFound());
+        assertThat(properties.rateLimits().perMinuteByRoute().keySet()).isSubsetOf(context
+                .getBean("requestMappingHandlerMapping", RequestMappingHandlerMapping.class).getHandlerMethods().keySet()
+                .stream().flatMap(mapping -> mapping.getPatternValues().stream()).toList());
+    }
+
+    @Test
+    void healthCorsUnknownRoutesAndDisabledDocumentation() throws Exception {
+        call(get("/health")).andExpect(status().isOk())
+                .andExpect(content().json("{\"status\": \"healthy\"}", JsonCompareMode.STRICT));
+        call(get("/health").header("Origin", "https://krktransit.pl"))
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://krktransit.pl"));
         call(get("/v1/unknown")).andExpect(status().isNotFound())
                 .andExpect(content().json("{\"detail\": \"Not Found\"}", JsonCompareMode.STRICT));
-        call(post("/v1/lines/194/stats/trend")).andExpect(status().isMethodNotAllowed())
+        call(post("/health")).andExpect(status().isMethodNotAllowed())
                 .andExpect(content().json("{\"detail\": \"Method Not Allowed\"}", JsonCompareMode.STRICT));
+        call(get("/openapi.json")).andExpect(status().isNotFound());
+        call(get("/docs")).andExpect(status().isNotFound());
     }
 
     private ResultActions call(MockHttpServletRequestBuilder request) throws Exception {
