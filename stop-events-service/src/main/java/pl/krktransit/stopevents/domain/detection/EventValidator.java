@@ -3,7 +3,6 @@ package pl.krktransit.stopevents.domain.detection;
 import java.util.ArrayList;
 import java.util.List;
 import pl.krktransit.stopevents.domain.event.StopEvent;
-import pl.krktransit.stopevents.domain.state.SavedStop;
 import pl.krktransit.stopevents.domain.state.SavedStops;
 
 public final class EventValidator {
@@ -25,15 +24,24 @@ public final class EventValidator {
 
     private boolean valid(StopEvent event, SavedStops saved) {
         if (implausible(event)) return false;
-        if (event.sequence() <= 1) return true;
-        var previous = saved.previous(event.tripId(), event.serviceDate(), event.sequence());
-        return previous == null || follows(previous, event);
+        return chronologicallyFits(event, saved) && delayFits(event, saved);
     }
 
-    private boolean follows(SavedStop previous, StopEvent event) {
-        return (long) previous.delaySeconds() - event.delaySeconds() <= DELAY_DROP_LIMIT_SECONDS
-                && previous.eventTime().isBefore(event.eventTime());
+    private boolean chronologicallyFits(StopEvent event, SavedStops saved) {
+        var previous = saved.previous(event.tripId(), event.serviceDate(), event.sequence());
+        var next = saved.next(event.tripId(), event.serviceDate(), event.sequence());
+        return (previous == null || previous.eventTime().isBefore(event.eventTime()))
+                && (next == null || event.eventTime().isBefore(next.eventTime()));
     }
+
+    private boolean delayFits(StopEvent event, SavedStops saved) {
+        var previous = saved.at(event.tripId(), event.serviceDate(), event.sequence() - 1);
+        var next = saved.at(event.tripId(), event.serviceDate(), event.sequence() + 1);
+        return (previous == null || allowedDrop(previous.delaySeconds(), event.delaySeconds()))
+                && (next == null || allowedDrop(event.delaySeconds(), next.delaySeconds()));
+    }
+
+    private boolean allowedDrop(int previous, int next) { return (long) previous - next <= DELAY_DROP_LIMIT_SECONDS; }
 
     private boolean implausible(StopEvent event) {
         return event.delaySeconds() < -earlyLimit(event) || event.delaySeconds() > LATE_LIMIT_SECONDS;

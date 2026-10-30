@@ -19,7 +19,7 @@ public final class VehicleDetector {
 
     public DetectionOutcome detect(VehicleObservation vehicle, VehicleState previous, TripContext trip,
                                    TripForecasts forecasts, SavedStops saved) {
-        if (!vehicle.eligible() || trip == null || trip.stop(vehicle.sequence()) == null) {
+        if (!eligible(vehicle, trip)) {
             return new DetectionOutcome(List.of(), null);
         }
         var date = calendar.serviceDate(vehicle.timestamp(), trip.stop(vehicle.sequence()).arrivalSeconds());
@@ -29,5 +29,15 @@ public final class VehicleDetector {
         if (vehicle.stopped() && accepted.size() > 1) accepted = batchValidator.validate(accepted);
         return new DetectionOutcome(accepted, new VehicleState(vehicle.tripId(), vehicle.licensePlate(),
                 vehicle.sequence(), vehicle.timestamp(), vehicle.fetchedAt()));
+    }
+
+    public List<StopEvent> detectHistoricalStop(VehicleObservation vehicle, TripContext trip, SavedStops saved) {
+        if (!eligible(vehicle, trip)) return List.of();
+        var date = calendar.serviceDate(vehicle.timestamp(), trip.stop(vehicle.sequence()).arrivalSeconds());
+        return validator.validate(stoppedAt.detect(vehicle, trip, date, saved), saved);
+    }
+
+    private boolean eligible(VehicleObservation vehicle, TripContext trip) {
+        return vehicle.eligible() && trip != null && trip.stop(vehicle.sequence()) != null;
     }
 }
