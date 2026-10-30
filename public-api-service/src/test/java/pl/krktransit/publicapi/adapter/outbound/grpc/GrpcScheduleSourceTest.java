@@ -9,12 +9,15 @@ import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
 import pl.krktransit.publicapi.application.schedule.ShapePoint;
 import pl.krktransit.publicapi.application.schedule.TripStop;
+import pl.krktransit.publicapi.application.schedule.TripSummary;
 import pl.krktransit.publicapi.support.FakeUpstreams;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
 import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
@@ -23,7 +26,7 @@ class GrpcScheduleSourceTest {
     private final FakeUpstreams upstreams = startUpstreams();
     private final ManagedChannel channel = upstreams.channel();
     private final GrpcScheduleSource source =
-            new GrpcScheduleSource(channel, new GrpcCallSettings("schedule-token", Duration.ofSeconds(2)));
+            new GrpcScheduleSource(channel, new GrpcCallSettings("schedule-token", Duration.ofSeconds(2)), 2);
 
     @AfterEach
     void close() {
@@ -52,6 +55,24 @@ class GrpcScheduleSourceTest {
         assertThat(source.shape("hash", "krakow:mpk-bus:sh").orElseThrow().points()).containsExactly(new ShapePoint(0, 19.5, 3));
         assertThat(source.shape("hash", "krakow:mpk-bus:missing")).isEmpty();
         assertThat(upstreams.authorizations).isNotEmpty().allMatch("Bearer schedule-token"::equals);
+    }
+
+    @Test
+    void summariesSeparateFoundMissingAndUnresolvedTripsWithBoundedConcurrency() {
+        var tripIds = IntStream.range(0, 12).mapToObj(index -> "krakow:mpk-bus:" + index).collect(Collectors.toSet());
+        tripIds.forEach(tripId -> upstreams.schedule.trips.put(tripKey("hash", tripId),
+                GetTripContextResponse.newBuilder().setLineNumber("1").setShapeId("krakow:mpk-bus:sh").build()));
+        upstreams.schedule.trips.remove(tripKey("hash", "krakow:mpk-bus:0"));
+        upstreams.schedule.tripFailures.put("krakow:mpk-bus:1", Status.UNAVAILABLE);
+        upstreams.schedule.tripDelay = Duration.ofMillis(20);
+
+        var summaries = source.tripSummaries("hash", tripIds);
+
+        assertThat(summaries.missing()).containsExactly("krakow:mpk-bus:0");
+        assertThat(summaries.found()).hasSize(10).containsEntry("krakow:mpk-bus:2", new TripSummary("1", null, "krakow:mpk-bus:sh"))
+                .doesNotContainKey("krakow:mpk-bus:1");
+        assertThat(upstreams.schedule.tripCalls).hasValue(12);
+        assertThat(upstreams.schedule.maximumConcurrentTripCalls).hasValue(2);
     }
 
     @Test

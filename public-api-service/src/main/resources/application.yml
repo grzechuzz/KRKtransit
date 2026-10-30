@@ -28,4 +28,6 @@ public-api:
     address: ${PUBLIC_API_SCHEDULE_ADDRESS:static://127.0.0.1:9090}
     token: ${PUBLIC_API_SCHEDULE_TOKEN:}
     deadline: 2s
+    trip-cache-size: 50000
     hash-refresh: 30s
+    maximum-concurrent-lookups: 32

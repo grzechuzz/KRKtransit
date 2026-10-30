@@ -36,8 +36,8 @@ class PublicApiConfiguration {
     @Bean
     ScheduleSource scheduleSource(ManagedChannel scheduleChannel, PublicApiProperties properties, Clock clock) {
         var settings = properties.schedule();
-        var client = new GrpcScheduleSource(scheduleChannel, settings.calls());
-        return new CachedScheduleSource(client, settings.hashRefresh(), clock);
+        var client = new GrpcScheduleSource(scheduleChannel, settings.calls(), settings.maximumConcurrentLookups());
+        return new CachedScheduleSource(client, settings.tripCacheSize(), settings.hashRefresh(), clock);
     }
 
     @Bean
