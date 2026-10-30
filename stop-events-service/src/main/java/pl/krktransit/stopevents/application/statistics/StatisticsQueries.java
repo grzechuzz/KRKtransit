@@ -50,14 +50,17 @@ public final class StatisticsQueries implements AutoCloseable {
     private synchronized Flight join(Key key) {
         if (closed) throw new StatisticsFailure(StatisticsFailure.Kind.UNAVAILABLE, "Statistics service is stopping");
         var current = flights.get(key);
+        if (current != null && current.task.isDone()) {
+            current.finish();
+            current = null;
+        }
         if (current != null) { current.waiters++; return current; }
         if (!permits.tryAcquire()) throw new StatisticsFailure(StatisticsFailure.Kind.BUSY, "Statistics query capacity reached");
         var flight = new Flight(key);
         flights.put(key, flight);
         try { workers.execute(flight); }
         catch (RejectedExecutionException failure) {
-            flights.remove(key, flight);
-            permits.release();
+            flight.finish();
             throw new StatisticsFailure(StatisticsFailure.Kind.UNAVAILABLE, "Statistics service is stopping", failure);
         }
         return flight;
@@ -127,6 +130,7 @@ public final class StatisticsQueries implements AutoCloseable {
         private final QueryCancellation cancellation = new QueryCancellation();
         private final FutureTask<StatisticsResult> task;
         private int waiters = 1;
+        private boolean finished;
 
         private Flight(Key key) {
             this.key = key;
@@ -136,8 +140,14 @@ public final class StatisticsQueries implements AutoCloseable {
         @Override
         public void run() {
             try { task.run(); }
-            finally {
-                synchronized (StatisticsQueries.this) { flights.remove(key, this); }
+            finally { finish(); }
+        }
+
+        private void finish() {
+            synchronized (StatisticsQueries.this) {
+                if (finished) return;
+                finished = true;
+                flights.remove(key, this);
                 permits.release();
             }
         }
