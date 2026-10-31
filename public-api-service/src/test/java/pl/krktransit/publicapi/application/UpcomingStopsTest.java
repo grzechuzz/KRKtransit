@@ -84,6 +84,41 @@ class UpcomingStopsTest {
     }
 
     @Test
+    void theReportedStopIdIdentifiesTheTargetWhenTheSequenceNamesTheLastPassedStop() {
+        tripWithSequences(1, 2, 3, 4, 5, 6, 7, 8);
+        report("s4", 3, IN_TRANSIT_TO);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(4, 5, 6, 7, 8);
+        report("s4", 3, INCOMING_AT);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(4, 5, 6, 7, 8);
+        report("s3", 3, STOPPED_AT);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(4, 5, 6, 7, 8);
+        report("s4", 4, IN_TRANSIT_TO);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(4, 5, 6, 7, 8);
+    }
+
+    @Test
+    void theSequenceChoosesBetweenRepeatedOccurrencesOfTheReportedStop() {
+        schedule.trip(List.of(stop("x", 1, 0), stop("a", 2, 60), stop("y", 3, 120), stop("a", 4, 180), stop("z", 9, 240)));
+        report("a", 1, IN_TRANSIT_TO);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(2, 3, 4, 9);
+        report("a", 3, IN_TRANSIT_TO);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(4, 9);
+        report("a", 8, STOPPED_AT);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(9);
+    }
+
+    @Test
+    void anUnknownOrAmbiguousStopIdIsUnknownProgress() {
+        schedule.trip(List.of(stop("x", 1, 0), stop("a", 2, 60), stop("a", 3, 120)));
+        report("missing", 1, IN_TRANSIT_TO);
+        assertThat(upcoming.forTrip(TRIP).progress()).isEqualTo(TripProgress.UNKNOWN);
+        report("a", null, IN_TRANSIT_TO);
+        assertThat(upcoming.forTrip(TRIP).progress()).isEqualTo(TripProgress.UNKNOWN);
+        report("x", null, IN_TRANSIT_TO);
+        assertThat(sequences(upcoming.forTrip(TRIP))).containsExactly(1, 2, 3);
+    }
+
+    @Test
     void anAbsentStatusFollowsTheGtfsRealtimeInTransitDefault() {
         tripWithSequences(1, 2, 3, 4);
         drive(2, null);
@@ -94,8 +129,8 @@ class UpcomingStopsTest {
     @Test
     void unusableProgressIsReportedAsUnknownWithoutPretendingTheTripStarts() {
         tripWithSequences(1, 2, 3, 4);
-        for (var progress : List.of(new StopProgress(2, UNRECOGNIZED), new StopProgress(null, IN_TRANSIT_TO),
-                new StopProgress(9, IN_TRANSIT_TO), StopProgress.NONE)) {
+        for (var progress : List.of(new StopProgress(null, 2, UNRECOGNIZED), new StopProgress(null, null, IN_TRANSIT_TO),
+                new StopProgress(null, 9, IN_TRANSIT_TO), StopProgress.NONE)) {
             positions.current = List.of(vehicle("DN041", OBSERVED, progress));
             clock.advance(Duration.ofSeconds(3));
 
@@ -119,7 +154,7 @@ class UpcomingStopsTest {
     void nightTripsAfterMidnightKeepThePreviousServiceDate() {
         schedule.trip(List.of(stop("a", 1, 87_900), stop("b", 2, 88_500), stop("c", 3, 89_100)));
         positions.current = List.of(vehicle("DN041", Instant.parse("2026-11-02T23:30:00Z"),
-                new StopProgress(2, IN_TRANSIT_TO)));
+                new StopProgress(null, 2, IN_TRANSIT_TO)));
 
         assertThat(upcoming.forTrip(TRIP).stops()).extracting(UpcomingStop::scheduledArrival)
                 .containsExactly(Instant.parse("2026-11-02T23:35:00Z"), Instant.parse("2026-11-02T23:45:00Z"));
@@ -128,8 +163,8 @@ class UpcomingStopsTest {
     @Test
     void theNewestVehicleOnTheTripProvidesTheProgress() {
         tripWithSequences(1, 2, 3, 4, 5);
-        positions.current = List.of(vehicle("DN041", OBSERVED.minusSeconds(30), new StopProgress(4, IN_TRANSIT_TO)),
-                vehicle("DN042", OBSERVED, new StopProgress(2, IN_TRANSIT_TO)));
+        positions.current = List.of(vehicle("DN041", OBSERVED.minusSeconds(30), new StopProgress(null, 4, IN_TRANSIT_TO)),
+                vehicle("DN042", OBSERVED, new StopProgress(null, 2, IN_TRANSIT_TO)));
 
         var trip = upcoming.forTrip(TRIP);
 
@@ -160,7 +195,12 @@ class UpcomingStopsTest {
     }
 
     private void drive(int sequence, VehicleStopStatus status) {
-        positions.current = List.of(vehicle("DN041", OBSERVED, new StopProgress(sequence, status)));
+        positions.current = List.of(vehicle("DN041", OBSERVED, new StopProgress(null, sequence, status)));
+        clock.advance(Duration.ofSeconds(3));
+    }
+
+    private void report(String stop, Integer sequence, VehicleStopStatus status) {
+        positions.current = List.of(vehicle("DN041", OBSERVED, new StopProgress("krakow:mpk-bus:" + stop, sequence, status)));
         clock.advance(Duration.ofSeconds(3));
     }
 
