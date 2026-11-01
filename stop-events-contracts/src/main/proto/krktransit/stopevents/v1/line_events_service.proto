@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package krktransit.stopevents.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "pl.krktransit.stopevents.contracts.v1";
+option java_multiple_files = true;
+option java_outer_classname = "LineEventsServiceProto";
+
+service LineEventsService {
+  rpc ListLineEvents(ListLineEventsRequest) returns (ListLineEventsResponse);
+}
+
+message ListLineEventsRequest {
+  optional string city_id = 1;
+  optional string line_number = 2;
+  google.protobuf.Timestamp created_after = 3;
+  optional int64 after_id = 4;
+  optional int32 page_size = 5;
+}
+
+message ListLineEventsResponse {
+  repeated LineEvent events = 1;
+  google.protobuf.Timestamp next_created_after = 2;
+  optional int64 next_after_id = 3;
+  optional bool has_more = 4;
+}
+
+message LineEvent {
+  optional int64 id = 1;
+  optional string source_id = 2;
+  optional string trip_id = 3;
+  optional string service_date = 4;
+  optional int32 stop_sequence = 5;
+  optional int32 max_stop_sequence = 6;
+  optional string stop_id = 7;
+  optional string stop_name = 8;
+  optional string stop_desc = 9;
+  google.protobuf.Timestamp planned_time = 10;
+  google.protobuf.Timestamp event_time = 11;
+  optional int32 delay_seconds = 12;
+  optional int32 detection_method = 13;
+  optional bool is_estimated = 14;
+  google.protobuf.Timestamp created_at = 15;
+  optional string headsign = 16;
+}
