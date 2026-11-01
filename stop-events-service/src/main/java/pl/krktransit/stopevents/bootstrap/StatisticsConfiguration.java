@@ -15,9 +15,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import org.springframework.grpc.server.ServerBuilderCustomizer;
 import pl.krktransit.stopevents.adapter.inbound.grpc.BearerTokenInterceptor;
+import pl.krktransit.stopevents.adapter.inbound.grpc.LineEventsGrpcEndpoint;
 import pl.krktransit.stopevents.adapter.inbound.grpc.StatisticsGrpcEndpoint;
+import pl.krktransit.stopevents.adapter.outbound.postgres.JdbcLineEventsReader;
 import pl.krktransit.stopevents.adapter.outbound.postgres.JdbcStatisticsReader;
 import pl.krktransit.stopevents.adapter.outbound.redis.RedisStatisticsCache;
+import pl.krktransit.stopevents.application.lineevents.LineEvents;
 import pl.krktransit.stopevents.application.statistics.StatisticsQueries;
 
 @Configuration(proxyBeanMethods = false)
@@ -51,6 +54,14 @@ class StatisticsConfiguration {
 
     @Bean
     StatisticsGrpcEndpoint statisticsEndpoint(StatisticsQueries queries) { return new StatisticsGrpcEndpoint(queries); }
+
+    @Bean
+    LineEvents lineEvents(@Qualifier("statisticsDataSource") HikariDataSource source, StatisticsProperties properties) {
+        return new LineEvents(new JdbcLineEventsReader(source), properties.maximumCalculations());
+    }
+
+    @Bean
+    LineEventsGrpcEndpoint lineEventsEndpoint(LineEvents lineEvents) { return new LineEventsGrpcEndpoint(lineEvents); }
 
     @Bean(destroyMethod = "close")
     ExecutorService statisticsRpcExecutor() { return Executors.newVirtualThreadPerTaskExecutor(); }
