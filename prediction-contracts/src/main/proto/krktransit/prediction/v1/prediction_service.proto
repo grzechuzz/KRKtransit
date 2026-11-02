@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package krktransit.prediction.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "pl.krktransit.prediction.contracts.v1";
+option java_multiple_files = true;
+option java_outer_classname = "PredictionServiceProto";
+
+service PredictionService {
+  rpc PredictArrivals(PredictArrivalsRequest) returns (PredictArrivalsResponse);
+}
+
+message PredictArrivalsRequest {
+  optional string city_id = 1;
+  optional string trip_id = 2;
+  optional string service_date = 3;
+  optional string line_number = 4;
+  optional int32 max_stop_sequence = 5;
+  repeated TripStop stops = 6;
+  repeated int32 target_sequences = 7;
+}
+
+message TripStop {
+  optional int32 stop_sequence = 1;
+  optional string stop_name = 2;
+  optional string stop_desc = 3;
+  optional int32 arrival_seconds = 4;
+}
+
+message PredictArrivalsResponse {
+  repeated PredictedArrival predictions = 1;
+  optional string model_version = 2;
+  optional int32 anchor_sequence = 3;
+  optional bool anchor_estimated = 4;
+  google.protobuf.Timestamp predicted_at = 5;
+}
+
+message PredictedArrival {
+  optional int32 stop_sequence = 1;
+  optional int32 predicted_delay_seconds = 2;
+}

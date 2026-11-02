@@ -45,3 +45,7 @@ dumps/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Generated Python gRPC stubs
+prediction-service/src/krktransit/
+.pytest_cache/

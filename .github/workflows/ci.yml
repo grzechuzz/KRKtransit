@@ -117,3 +117,35 @@ jobs:
           path: '**/target/failsafe-reports/'
           if-no-files-found: ignore
           retention-days: 14
+
+  prediction-service:
+    name: Prediction service tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: prediction-service
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            prediction-service/requirements.txt
+            prediction-service/requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install --no-input --disable-pip-version-check -r requirements-dev.txt
+
+      - name: Generate gRPC stubs
+        run: python generate_stubs.py
+
+      - name: Run tests
+        run: python -m pytest -q
