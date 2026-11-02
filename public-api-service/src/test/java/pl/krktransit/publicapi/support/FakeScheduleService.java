@@ -55,11 +55,11 @@ public final class FakeScheduleService extends ScheduleServiceGrpc.ScheduleServi
         maximumConcurrentTripCalls.accumulateAndGet(concurrentTripCalls.incrementAndGet(), Math::max);
         try {
             pause();
-            var key = tripKey(request.getHash(), request.getTripId());
-            respond(trips.get(key), failure == null ? tripFailures.get(request.getTripId()) : failure, observer);
         } finally {
             concurrentTripCalls.decrementAndGet();
         }
+        var key = tripKey(request.getHash(), request.getTripId());
+        respond(trips.get(key), failure == null ? tripFailures.get(request.getTripId()) : failure, observer);
     }
 
     @Override
