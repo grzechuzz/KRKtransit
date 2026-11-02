@@ -25,6 +25,7 @@
         <module>stop-events-service</module>
         <module>live-vehicles-contracts</module>
         <module>live-vehicles-service</module>
+        <module>prediction-contracts</module>
         <module>public-api-service</module>
     </modules>
     <properties>
