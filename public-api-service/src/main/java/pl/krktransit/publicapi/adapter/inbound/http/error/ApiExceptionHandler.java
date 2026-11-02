@@ -1,5 +1,7 @@
 package pl.krktransit.publicapi.adapter.inbound.http.error;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     private static final System.Logger LOG = System.getLogger(ApiExceptionHandler.class.getName());
     private static final ErrorResponse INTERNAL_ERROR = new ErrorResponse("INTERNAL_ERROR", "Internal server error");
     private static final ErrorResponse RATE_LIMITED = new ErrorResponse("RATE_LIMIT_EXCEEDED", "Rate limit exceeded");
+    private static final Duration FAILURE_LOG_INTERVAL = Duration.ofMinutes(1);
+
+    private final FailureLogThrottle failureLogs;
+
+    public ApiExceptionHandler(Clock clock) {
+        this.failureLogs = new FailureLogThrottle(clock, FAILURE_LOG_INTERVAL);
+    }
 
     @ExceptionHandler(ApiFailure.class)
     public ResponseEntity<ErrorResponse> apiFailure(ApiFailure failure) {
@@ -65,13 +74,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private ResponseEntity<ErrorResponse> upstreamFailure(HttpStatus status, ApiFailure failure) {
-        LOG.log(System.Logger.Level.WARNING, failure.getMessage(), failure.getCause());
+        logThrottled(System.Logger.Level.WARNING, failure);
         return error(status, "EXTERNAL_SERVICE_ERROR", failure);
     }
 
     private ResponseEntity<ErrorResponse> internalError(ApiFailure failure) {
-        LOG.log(System.Logger.Level.ERROR, failure.getMessage(), failure.getCause());
+        logThrottled(System.Logger.Level.ERROR, failure);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(INTERNAL_ERROR);
+    }
+
+    private void logThrottled(System.Logger.Level level, ApiFailure failure) {
+        if (failureLogs.allows(failure.getMessage())) LOG.log(level, failure.getMessage(), failure.getCause());
     }
 
     private ResponseEntity<Object> invalidParameters(List<ValidationIssue> issues) {

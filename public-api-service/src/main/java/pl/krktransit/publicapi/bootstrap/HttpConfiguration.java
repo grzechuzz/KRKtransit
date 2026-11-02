@@ -1,5 +1,6 @@
 package pl.krktransit.publicapi.bootstrap;
 
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import pl.krktransit.publicapi.adapter.inbound.http.error.ApiErrorAttributes;
@@ -36,7 +37,7 @@ class HttpConfiguration {
     HealthController healthController() { return new HealthController(); }
 
     @Bean
-    ApiExceptionHandler apiExceptionHandler() { return new ApiExceptionHandler(); }
+    ApiExceptionHandler apiExceptionHandler(Clock clock) { return new ApiExceptionHandler(clock); }
 
     @Bean
     ApiErrorAttributes errorAttributes() { return new ApiErrorAttributes(); }
