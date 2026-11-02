@@ -39,6 +39,7 @@ dumps/
 *.sql
 !schedule-service/src/main/resources/db/schedule/*.sql
 !stop-events-service/src/main/resources/db/stop-events/*.sql
+!docker/postgres/*.sql
 *.sqlite
 *.db
 
