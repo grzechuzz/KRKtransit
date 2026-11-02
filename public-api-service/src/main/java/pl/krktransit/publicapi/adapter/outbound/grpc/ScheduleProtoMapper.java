@@ -32,7 +32,7 @@ final class ScheduleProtoMapper {
     }
 
     TripStops tripStops(GetTripContextResponse trip) {
-        return new TripStops(trip.getTripId(), trip.getStopsList().stream().map(this::stop).toList());
+        return new TripStops(trip.getTripId(), trip.getLineNumber(), trip.getStopsList().stream().map(this::stop).toList());
     }
 
     Shape shape(GetShapeResponse shape) {

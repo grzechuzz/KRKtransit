@@ -10,11 +10,11 @@ import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcCallSettings;
 
 @ConfigurationProperties("public-api")
 public record PublicApiProperties(List<String> allowedOrigins, Statistics statistics, Schedule schedule,
-                                  LiveVehicles liveVehicles, RateLimits rateLimits) {
+                                  LiveVehicles liveVehicles, Prediction prediction, RateLimits rateLimits) {
     public PublicApiProperties {
         allowedOrigins = List.copyOf(allowedOrigins);
         if (allowedOrigins.isEmpty()) throw new IllegalArgumentException("At least one allowed origin is required");
-        requirePresent(statistics, schedule, liveVehicles, rateLimits);
+        requirePresent(statistics, schedule, liveVehicles, prediction, rateLimits);
     }
 
     private static void requirePresent(Object... sections) {
@@ -77,6 +77,17 @@ public record PublicApiProperties(List<String> allowedOrigins, Statistics statis
 
         @Override
         public String toString() { return "LiveVehicles[address=" + address + ", deadline=" + deadline + "]"; }
+    }
+
+    public record Prediction(String address, String token, Duration deadline) {
+        public Prediction { requirePositive(deadline); }
+
+        public boolean enabled() { return address != null && !address.isBlank(); }
+
+        public GrpcCallSettings calls() { return new GrpcCallSettings(token, deadline); }
+
+        @Override
+        public String toString() { return "Prediction[address=" + address + ", deadline=" + deadline + "]"; }
     }
 
     public record RateLimits(int maximumTrackedClients, List<Route> routes) {

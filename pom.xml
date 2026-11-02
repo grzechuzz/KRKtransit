@@ -52,6 +52,11 @@
             </dependency>
             <dependency>
                 <groupId>pl.krktransit</groupId>
+                <artifactId>prediction-contracts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>pl.krktransit</groupId>
                 <artifactId>schedule-core</artifactId>
                 <version>${project.version}</version>
             </dependency>

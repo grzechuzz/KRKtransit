@@ -67,7 +67,7 @@ class CachedScheduleSourceTest {
 
     @Test
     void remembersTripStopsAndTheirAbsencePerScheduleVersionButNotFailures() {
-        var stops = new TripStops("found", List.of(new TripStop("s", "Rondo", null, null, null, 1, 0, 0)));
+        var stops = new TripStops("found", "139", List.of(new TripStop("s", "Rondo", null, null, null, 1, 0, 0)));
         delegate.stops.put("found", stops);
 
         assertThat(cache.tripStops("hash", "found")).contains(stops);

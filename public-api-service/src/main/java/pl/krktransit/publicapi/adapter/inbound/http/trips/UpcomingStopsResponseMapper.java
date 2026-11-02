@@ -1,5 +1,6 @@
 package pl.krktransit.publicapi.adapter.inbound.http.trips;
 
+import java.time.Instant;
 import pl.krktransit.publicapi.adapter.inbound.http.ResponseTimes;
 import pl.krktransit.publicapi.adapter.inbound.http.json.UpcomingStopItem;
 import pl.krktransit.publicapi.adapter.inbound.http.json.UpcomingStopsResponse;
@@ -15,6 +16,8 @@ final class UpcomingStopsResponseMapper {
     private UpcomingStopItem stop(UpcomingStop upcoming) {
         var stop = upcoming.stop();
         return new UpcomingStopItem(stop.stopId(), stop.stopName(), stop.stopDescription(), stop.sequence(),
-                ResponseTimes.warsawWithOffset(upcoming.scheduledArrival()), null);
+                ResponseTimes.warsawWithOffset(upcoming.scheduledArrival()), predicted(upcoming.predictedArrival()));
     }
+
+    private String predicted(Instant arrival) { return arrival == null ? null : ResponseTimes.warsawWithOffset(arrival); }
 }

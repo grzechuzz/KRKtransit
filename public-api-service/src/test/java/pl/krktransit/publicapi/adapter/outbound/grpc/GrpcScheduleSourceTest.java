@@ -50,6 +50,7 @@ class GrpcScheduleSourceTest {
 
         assertThat(source.currentHash(new FeedId("krakow", "mpk-bus"))).contains("hash");
         assertThat(source.currentHash(new FeedId("krakow", "unknown"))).isEmpty();
+        assertThat(source.tripStops("hash", "krakow:mpk-bus:1").orElseThrow().lineNumber()).isEqualTo("194");
         assertThat(source.tripStops("hash", "krakow:mpk-bus:1").orElseThrow().stops()).containsExactly(
                 new TripStop("krakow:mpk-bus:s1", "Rondo", "01", 50.1, 19.9, 1, 0, 30),
                 new TripStop("krakow:mpk-bus:s2", "Plac", null, null, null, 2, 88_500, 88_560));
