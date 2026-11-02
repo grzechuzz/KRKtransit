@@ -1,0 +1,340 @@
+name: krktransit
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: "5"
+
+x-service: &service
+  restart: unless-stopped
+  logging: *logging
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  stop_grace_period: 45s
+
+x-one-shot: &one-shot
+  restart: "no"
+  logging: *logging
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  mem_limit: 512m
+
+services:
+  postgres:
+    image: postgres:17.11
+    restart: unless-stopped
+    logging: *logging
+    command: ["postgres", "-c", "shared_buffers=1GB"]
+    environment:
+      POSTGRES_DB: krktransit
+      POSTGRES_USER: krktransit_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?run scripts/generate-env.sh}
+      SCHEDULE_OWNER_PASSWORD: ${SCHEDULE_OWNER_PASSWORD:?run scripts/generate-env.sh}
+      SCHEDULE_RUNTIME_PASSWORD: ${SCHEDULE_RUNTIME_PASSWORD:?run scripts/generate-env.sh}
+      STOP_EVENTS_OWNER_PASSWORD: ${STOP_EVENTS_OWNER_PASSWORD:?run scripts/generate-env.sh}
+      STOP_EVENTS_RUNTIME_PASSWORD: ${STOP_EVENTS_RUNTIME_PASSWORD:?run scripts/generate-env.sh}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+    networks:
+      - database
+    mem_limit: 2816m
+    shm_size: 256m
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --host 127.0.0.1 --username krktransit_admin --dbname krktransit"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4.7-alpine
+    restart: unless-stopped
+    logging: *logging
+    user: "999:1000"
+    entrypoint: ["sh", "/usr/local/etc/redis/start.sh"]
+    read_only: true
+    tmpfs:
+      - /run/redis:uid=999,gid=1000,mode=0700,size=1m
+      - /data:uid=999,gid=1000,size=1m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      REDIS_ADMIN_PASSWORD: ${REDIS_ADMIN_PASSWORD:?run scripts/generate-env.sh}
+      REDIS_INGESTION_PASSWORD: ${REDIS_INGESTION_PASSWORD:?run scripts/generate-env.sh}
+      REDIS_STOP_EVENTS_PASSWORD: ${REDIS_STOP_EVENTS_PASSWORD:?run scripts/generate-env.sh}
+      REDIS_LIVE_VEHICLES_PASSWORD: ${REDIS_LIVE_VEHICLES_PASSWORD:?run scripts/generate-env.sh}
+    volumes:
+      - ./docker/redis/start.sh:/usr/local/etc/redis/start.sh:ro
+    networks:
+      - redis
+    mem_limit: 1536m
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_ADMIN_PASSWORD\" redis-cli --no-auth-warning --user admin ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  schedule-migrate:
+    <<: *one-shot
+    image: krktransit/schedule-service:local
+    pull_policy: never
+    command: ["--migrate"]
+    environment:
+      SCHEDULE_DB_URL: jdbc:postgresql://postgres:5432/krktransit
+      SCHEDULE_DB_USER: schedule_owner
+      SCHEDULE_DB_PASSWORD: ${SCHEDULE_OWNER_PASSWORD:?run scripts/generate-env.sh}
+    networks:
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  stop-events-migrate:
+    <<: *one-shot
+    image: krktransit/stop-events-service:local
+    pull_policy: never
+    command: ["--migrate"]
+    environment:
+      STOP_EVENTS_DB_URL: jdbc:postgresql://postgres:5432/krktransit
+      STOP_EVENTS_DB_USER: stop_owner
+      STOP_EVENTS_DB_PASSWORD: ${STOP_EVENTS_OWNER_PASSWORD:?run scripts/generate-env.sh}
+    networks:
+      - database
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  database-grants:
+    <<: *one-shot
+    image: postgres:17.11
+    tmpfs:
+      - /tmp:size=64m
+      - /var/lib/postgresql/data:size=1m
+    entrypoint: ["psql", "--no-psqlrc", "--host", "postgres", "--username", "krktransit_admin", "--dbname", "krktransit", "--file", "/grants.sql"]
+    environment:
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:?run scripts/generate-env.sh}
+    volumes:
+      - ./docker/postgres/grants.sql:/grants.sql:ro
+    networks:
+      - database
+    depends_on:
+      schedule-migrate:
+        condition: service_completed_successfully
+      stop-events-migrate:
+        condition: service_completed_successfully
+
+  schedule:
+    <<: *service
+    image: krktransit/schedule-service:local
+    build:
+      context: .
+      args:
+        SERVICE: schedule-service
+    environment:
+      SCHEDULE_DB_URL: jdbc:postgresql://postgres:5432/krktransit
+      SCHEDULE_DB_USER: schedule_runtime
+      SCHEDULE_DB_PASSWORD: ${SCHEDULE_RUNTIME_PASSWORD:?run scripts/generate-env.sh}
+      SCHEDULE_GRPC_ADDRESS: 0.0.0.0
+      SCHEDULE_GRPC_TOKEN: ${SCHEDULE_GRPC_TOKEN:?run scripts/generate-env.sh}
+      SCHEDULE_ARCHIVE_DIRECTORY: /data/archives
+      SCHEDULE_TEMP_DIRECTORY: /data/tmp
+    volumes:
+      - schedule-data:/data
+    networks:
+      - database
+      - grpc
+      - schedule-egress
+    mem_limit: 1024m
+    depends_on:
+      database-grants:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/9090"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+  stop-events:
+    <<: *service
+    image: krktransit/stop-events-service:local
+    build:
+      context: .
+      args:
+        SERVICE: stop-events-service
+    environment:
+      STOP_EVENTS_DB_URL: jdbc:postgresql://postgres:5432/krktransit
+      STOP_EVENTS_DB_USER: stop_runtime
+      STOP_EVENTS_DB_PASSWORD: ${STOP_EVENTS_RUNTIME_PASSWORD:?run scripts/generate-env.sh}
+      STOP_EVENTS_REDIS_URL: redis://redis:6379
+      STOP_EVENTS_REDIS_USERNAME: stop-events
+      STOP_EVENTS_REDIS_PASSWORD: ${REDIS_STOP_EVENTS_PASSWORD:?run scripts/generate-env.sh}
+      STOP_EVENTS_SCHEDULE_ADDRESS: static://schedule:9090
+      STOP_EVENTS_SCHEDULE_TOKEN: ${SCHEDULE_GRPC_TOKEN:?run scripts/generate-env.sh}
+      STOP_EVENTS_GRPC_ADDRESS: 0.0.0.0
+      STOP_EVENTS_GRPC_TOKEN: ${STOP_EVENTS_GRPC_TOKEN:?run scripts/generate-env.sh}
+    networks:
+      - database
+      - redis
+      - grpc
+    mem_limit: 1280m
+    depends_on:
+      redis:
+        condition: service_healthy
+      schedule:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/9092"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+  live-vehicles:
+    <<: *service
+    image: krktransit/live-vehicles-service:local
+    build:
+      context: .
+      args:
+        SERVICE: live-vehicles-service
+    environment:
+      LIVE_VEHICLES_REDIS_URL: redis://redis:6379
+      LIVE_VEHICLES_REDIS_USERNAME: live-vehicles
+      LIVE_VEHICLES_REDIS_PASSWORD: ${REDIS_LIVE_VEHICLES_PASSWORD:?run scripts/generate-env.sh}
+      LIVE_VEHICLES_GRPC_ADDRESS: 0.0.0.0
+      LIVE_VEHICLES_GRPC_TOKEN: ${LIVE_VEHICLES_GRPC_TOKEN:?run scripts/generate-env.sh}
+    networks:
+      - redis
+      - grpc
+    mem_limit: 512m
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/9091"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+  ingestion:
+    <<: *service
+    image: krktransit/realtime-ingestion-service:local
+    build:
+      context: .
+      args:
+        SERVICE: realtime-ingestion-service
+    environment:
+      REALTIME_REDIS_URL: redis://redis:6379
+      REALTIME_REDIS_USERNAME: ingestion
+      REALTIME_REDIS_PASSWORD: ${REDIS_INGESTION_PASSWORD:?run scripts/generate-env.sh}
+    networks:
+      - redis
+      - ingestion-egress
+    mem_limit: 1024m
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  prediction:
+    <<: *service
+    image: krktransit/prediction-service:local
+    build:
+      context: .
+      dockerfile: prediction-service/Dockerfile
+    environment:
+      PREDICTION_GRPC_ADDRESS: 0.0.0.0
+      PREDICTION_GRPC_TOKEN: ${PREDICTION_GRPC_TOKEN:?run scripts/generate-env.sh}
+      PREDICTION_STOP_EVENTS_ADDRESS: stop-events:9092
+      PREDICTION_STOP_EVENTS_TOKEN: ${STOP_EVENTS_GRPC_TOKEN:?run scripts/generate-env.sh}
+      PREDICTION_LOG_DIRECTORY: /data/predictions
+    volumes:
+      - prediction-data:/data
+    networks:
+      - grpc
+    mem_limit: 768m
+    depends_on:
+      stop-events:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import grpc; from grpc_health.v1 import health_pb2, health_pb2_grpc; channel = grpc.insecure_channel('127.0.0.1:9093'); reply = health_pb2_grpc.HealthStub(channel).Check(health_pb2.HealthCheckRequest(), timeout=2); raise SystemExit(reply.status != health_pb2.HealthCheckResponse.SERVING)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+  public-api:
+    <<: *service
+    image: krktransit/public-api-service:local
+    build:
+      context: .
+      args:
+        SERVICE: public-api-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${PUBLIC_API_PROFILE:-}
+      PUBLICAPI_ALLOWEDORIGINS: ${PUBLIC_API_ALLOWED_ORIGINS:-https://krktransit.pl}
+      PUBLIC_API_HTTP_ADDRESS: 0.0.0.0
+      PUBLIC_API_HTTP_PORT: "8000"
+      PUBLIC_API_STATISTICS_ADDRESS: static://stop-events:9092
+      PUBLIC_API_STATISTICS_TOKEN: ${STOP_EVENTS_GRPC_TOKEN:?run scripts/generate-env.sh}
+      PUBLIC_API_SCHEDULE_ADDRESS: static://schedule:9090
+      PUBLIC_API_SCHEDULE_TOKEN: ${SCHEDULE_GRPC_TOKEN:?run scripts/generate-env.sh}
+      PUBLIC_API_LIVE_VEHICLES_ADDRESS: static://live-vehicles:9091
+      PUBLIC_API_LIVE_VEHICLES_TOKEN: ${LIVE_VEHICLES_GRPC_TOKEN:?run scripts/generate-env.sh}
+      PUBLIC_API_PREDICTION_ADDRESS: static://prediction:9093
+      PUBLIC_API_PREDICTION_TOKEN: ${PREDICTION_GRPC_TOKEN:?run scripts/generate-env.sh}
+    ports:
+      - 127.0.0.1:${PUBLIC_API_HOST_PORT:-8080}:8000
+    networks:
+      - grpc
+      - edge
+    mem_limit: 1280m
+    depends_on:
+      schedule:
+        condition: service_healthy
+      stop-events:
+        condition: service_healthy
+      live-vehicles:
+        condition: service_healthy
+      prediction:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000; printf 'GET /health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; grep -q healthy <&3"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+networks:
+  database:
+    internal: true
+  redis:
+    internal: true
+  grpc:
+    internal: true
+  schedule-egress: {}
+  ingestion-egress: {}
+  edge: {}
+
+volumes:
+  postgres-data: {}
+  schedule-data: {}
+  prediction-data: {}
