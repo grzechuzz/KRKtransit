@@ -29,7 +29,13 @@ class PeriodicTask:
 
     def _run(self) -> None:
         while not self._stopped.wait(self._interval):
+            self._run_once()
+
+    def _run_once(self) -> None:
+        try:
             self._action()
+        except Exception:
+            LOG.exception("Periodic task %s failed", self._thread.name)
 
 
 class ProjectionRefresher:
