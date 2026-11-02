@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.trips;
 
 import pl.krktransit.publicapi.adapter.inbound.http.json.ShapePointItem;
 import pl.krktransit.publicapi.adapter.inbound.http.json.ShapeResponse;

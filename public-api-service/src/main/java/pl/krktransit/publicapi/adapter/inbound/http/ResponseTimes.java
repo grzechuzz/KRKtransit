@@ -5,7 +5,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
-final class ResponseTimes {
+public final class ResponseTimes {
     private static final ZoneId WARSAW = ZoneId.of("Europe/Warsaw");
     private static final DateTimeFormatter LOCAL = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ISO_SECONDS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
@@ -15,11 +15,11 @@ final class ResponseTimes {
 
     private ResponseTimes() {}
 
-    static String warsawLocal(Instant time) { return withMicroseconds(LOCAL.format(time.atZone(WARSAW)), time); }
+    public static String warsawLocal(Instant time) { return withMicroseconds(LOCAL.format(time.atZone(WARSAW)), time); }
 
-    static String warsawWithOffset(Instant time) { return ISO_WITH_OFFSET.format(time.atZone(WARSAW)); }
+    public static String warsawWithOffset(Instant time) { return ISO_WITH_OFFSET.format(time.atZone(WARSAW)); }
 
-    static String utc(Instant time) {
+    public static String utc(Instant time) {
         return withMicroseconds(ISO_SECONDS.format(time.atOffset(ZoneOffset.UTC)), time) + UTC_OFFSET;
     }
 

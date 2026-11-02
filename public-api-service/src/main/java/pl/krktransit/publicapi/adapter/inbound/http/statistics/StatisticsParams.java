@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.statistics;
 
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;

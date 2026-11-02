@@ -1,5 +1,6 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.trips;
 
+import pl.krktransit.publicapi.adapter.inbound.http.ResponseTimes;
 import pl.krktransit.publicapi.adapter.inbound.http.json.UpcomingStopItem;
 import pl.krktransit.publicapi.adapter.inbound.http.json.UpcomingStopsResponse;
 import pl.krktransit.publicapi.application.upcoming.UpcomingStop;

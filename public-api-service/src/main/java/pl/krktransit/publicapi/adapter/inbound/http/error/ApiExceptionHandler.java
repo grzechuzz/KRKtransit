@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.error;
 
 import java.util.List;
 import org.springframework.http.HttpHeaders;
@@ -15,6 +15,7 @@ import pl.krktransit.publicapi.adapter.inbound.http.json.DetailResponse;
 import pl.krktransit.publicapi.adapter.inbound.http.json.ErrorResponse;
 import pl.krktransit.publicapi.adapter.inbound.http.json.ValidationErrorResponse;
 import pl.krktransit.publicapi.adapter.inbound.http.json.ValidationIssue;
+import pl.krktransit.publicapi.adapter.inbound.http.ratelimit.RateLimitExceeded;
 import pl.krktransit.publicapi.application.ApiFailure;
 
 @RestControllerAdvice

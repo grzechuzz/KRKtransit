@@ -4,7 +4,7 @@ import java.util.List;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import pl.krktransit.publicapi.adapter.inbound.http.RateLimitInterceptor;
+import pl.krktransit.publicapi.adapter.inbound.http.ratelimit.RateLimitInterceptor;
 
 final class PublicApiWebMvc implements WebMvcConfigurer {
     private final RateLimitInterceptor rateLimits;

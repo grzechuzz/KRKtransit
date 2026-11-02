@@ -1,7 +1,8 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.vehicles;
 
 import java.util.List;
 import java.util.Objects;
+import pl.krktransit.publicapi.adapter.inbound.http.ResponseTimes;
 import pl.krktransit.publicapi.adapter.inbound.http.json.LiveVehicleItem;
 import pl.krktransit.publicapi.adapter.inbound.http.json.LiveVehicleResponse;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicle;

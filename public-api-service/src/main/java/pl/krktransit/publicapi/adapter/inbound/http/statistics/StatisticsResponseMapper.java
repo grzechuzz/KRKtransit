@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.statistics;
 
 import static pl.krktransit.publicapi.adapter.inbound.http.ResponseTimes.warsawLocal;
 
