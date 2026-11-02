@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.statistics;
 
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -9,6 +9,7 @@ import pl.krktransit.publicapi.adapter.inbound.http.json.MaxDelayResponse;
 import pl.krktransit.publicapi.adapter.inbound.http.json.PunctualityResponse;
 import pl.krktransit.publicapi.adapter.inbound.http.json.RouteDelayResponse;
 import pl.krktransit.publicapi.adapter.inbound.http.json.TrendResponse;
+import pl.krktransit.publicapi.adapter.inbound.http.validation.LineNumber;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
 
 @RestController

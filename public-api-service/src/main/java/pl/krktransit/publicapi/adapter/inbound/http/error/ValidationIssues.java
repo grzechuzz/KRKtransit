@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.error;
 
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.groupingBy;

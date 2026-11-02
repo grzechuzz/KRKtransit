@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.error;
 
 import java.util.Map;
 import java.util.Objects;

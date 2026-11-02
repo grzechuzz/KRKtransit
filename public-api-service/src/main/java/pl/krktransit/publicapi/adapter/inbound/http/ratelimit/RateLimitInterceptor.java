@@ -1,4 +1,4 @@
-package pl.krktransit.publicapi.adapter.inbound.http;
+package pl.krktransit.publicapi.adapter.inbound.http.ratelimit;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
