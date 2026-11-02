@@ -37,7 +37,7 @@ class ArchitectureTest {
         noClasses().that().resideOutsideOfPackage("..adapter.outbound.grpc..").should().dependOnClassesThat()
                 .resideInAnyPackage("..contracts.v1..", "com.google.protobuf..").check(PRODUCTION);
         noClasses().should().dependOnClassesThat(resideInAnyPackage("pl.krktransit.schedule..", "pl.krktransit.stopevents..",
-                "pl.krktransit.livevehicles..", "pl.krktransit.realtime..").and(resideOutsideOfPackage("..contracts.v1..")))
+                "pl.krktransit.livevehicles..", "pl.krktransit.realtime..", "pl.krktransit.prediction..").and(resideOutsideOfPackage("..contracts.v1..")))
                 .check(PRODUCTION);
     }
 }

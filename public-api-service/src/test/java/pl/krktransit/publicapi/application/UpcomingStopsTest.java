@@ -9,6 +9,7 @@ import static pl.krktransit.publicapi.application.vehicles.VehicleStopStatus.UNR
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +25,8 @@ import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.TripStop;
 import pl.krktransit.publicapi.application.schedule.TripStops;
 import pl.krktransit.publicapi.application.schedule.TripSummaries;
+import pl.krktransit.publicapi.application.upcoming.PredictedDelays;
+import pl.krktransit.publicapi.application.upcoming.PredictionRequest;
 import pl.krktransit.publicapi.application.upcoming.TripProgress;
 import pl.krktransit.publicapi.application.upcoming.UpcomingStop;
 import pl.krktransit.publicapi.application.upcoming.UpcomingStops;
@@ -42,8 +45,13 @@ class UpcomingStopsTest {
     private final MutableClock clock = new MutableClock(OBSERVED);
     private final Positions positions = new Positions();
     private final Schedule schedule = new Schedule();
+    private final List<PredictionRequest> predictionRequests = new ArrayList<>();
+    private PredictedDelays delays = PredictedDelays.NONE;
     private final UpcomingStops upcoming = new UpcomingStops(new PositionSnapshot(positions, Duration.ofSeconds(3), clock),
-            new ScheduleLookups(schedule));
+            new ScheduleLookups(schedule), request -> {
+                predictionRequests.add(request);
+                return delays;
+            });
 
     @Test
     void travellingTowardsAStopListsItAndTheFourAfterIt() {
@@ -189,6 +197,73 @@ class UpcomingStopsTest {
         assertThatThrownBy(() -> upcoming.forTrip(TRIP)).isInstanceOf(ApiFailure.UpstreamBusy.class);
     }
 
+    @Test
+    void predictedArrivalsAreTheScheduledTimePlusThePredictedDelayForRowsThatHaveOne() {
+        tripWithSequences(1, 2, 3, 4, 5, 6, 7, 8);
+        delays = new PredictedDelays(Map.of(3, 120, 4, 0, 5, -45));
+        drive(3, IN_TRANSIT_TO);
+
+        assertThat(upcoming.forTrip(TRIP).stops()).extracting(UpcomingStop::predictedArrival).containsExactly(
+                Instant.parse("2026-11-02T12:05:00Z"), Instant.parse("2026-11-02T12:04:00Z"),
+                Instant.parse("2026-11-02T12:04:15Z"), null, null);
+    }
+
+    @Test
+    void theRequestCarriesTheWholeTripTheServiceDateAndTheDisplayedRows() {
+        tripWithSequences(1, 2, 3, 4, 5, 6, 7, 8);
+        drive(3, STOPPED_AT);
+
+        upcoming.forTrip(TRIP);
+
+        var request = predictionRequests.getFirst();
+        assertThat(request.cityId()).isEqualTo("krakow");
+        assertThat(request.tripId()).isEqualTo(TRIP);
+        assertThat(request.serviceDate()).isEqualTo(LocalDate.of(2026, 11, 2));
+        assertThat(request.lineNumber()).isEqualTo("139");
+        assertThat(request.maximumSequence()).isEqualTo(8);
+        assertThat(request.stops()).hasSize(8);
+        assertThat(request.targetSequences()).containsExactly(4, 5, 6, 7, 8);
+    }
+
+    @Test
+    void predictionsAfterMidnightAndAboveTwentyFourHoursKeepThePreviousServiceDate() {
+        schedule.trip(List.of(stop("a", 1, 87_900), stop("b", 2, 88_500), stop("c", 3, 89_100)));
+        delays = new PredictedDelays(Map.of(2, 90, 3, -30));
+        positions.current = List.of(vehicle("DN041", Instant.parse("2026-11-02T23:30:00Z"),
+                new StopProgress(null, 2, IN_TRANSIT_TO)));
+
+        var trip = upcoming.forTrip(TRIP);
+
+        assertThat(predictionRequests.getFirst().serviceDate()).isEqualTo(LocalDate.of(2026, 11, 2));
+        assertThat(trip.stops()).extracting(UpcomingStop::predictedArrival)
+                .containsExactly(Instant.parse("2026-11-02T23:36:30Z"), Instant.parse("2026-11-02T23:44:30Z"));
+    }
+
+    @Test
+    void predictionsAcrossMidnightStayOnTheSameDayOfTheTrip() {
+        schedule.trip(List.of(stop("a", 1, 86_100), stop("b", 2, 86_340)));
+        delays = new PredictedDelays(Map.of(2, 120));
+        positions.current = List.of(vehicle("DN041", Instant.parse("2026-11-02T22:58:00Z"),
+                new StopProgress(null, 2, IN_TRANSIT_TO)));
+
+        var stop = upcoming.forTrip(TRIP).stops().getFirst();
+
+        assertThat(stop.scheduledArrival()).isEqualTo(Instant.parse("2026-11-02T22:59:00Z"));
+        assertThat(stop.predictedArrival()).isEqualTo(Instant.parse("2026-11-02T23:01:00Z"));
+    }
+
+    @Test
+    void noRowsMeanNoPredictionRequest() {
+        tripWithSequences(1, 2, 3);
+        drive(3, STOPPED_AT);
+        upcoming.forTrip(TRIP);
+        positions.current = List.of(vehicle("DN041", OBSERVED, StopProgress.NONE));
+        clock.advance(Duration.ofSeconds(3));
+        upcoming.forTrip(TRIP);
+
+        assertThat(predictionRequests).isEmpty();
+    }
+
     private void tripWithSequences(int... sequences) {
         schedule.trip(IntStream.of(sequences).mapToObj(sequence -> stop("s" + sequence, sequence, 13 * 3600 + sequence * 60))
                 .toList());
@@ -231,7 +306,7 @@ class UpcomingStopsTest {
         private final Map<String, TripStops> trips = new HashMap<>();
         private boolean unavailable;
 
-        void trip(List<TripStop> stops) { trips.put(TRIP, new TripStops(TRIP, new ArrayList<>(stops))); }
+        void trip(List<TripStop> stops) { trips.put(TRIP, new TripStops(TRIP, "139", new ArrayList<>(stops))); }
 
         @Override
         public Optional<String> currentHash(FeedId feed) {
