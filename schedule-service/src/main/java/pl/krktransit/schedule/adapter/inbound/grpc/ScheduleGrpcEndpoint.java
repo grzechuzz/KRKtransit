@@ -9,6 +9,8 @@ import pl.krktransit.schedule.application.querying.LookupFailure;
 import pl.krktransit.schedule.application.querying.ScheduleQueries;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashRequest;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashResponse;
+import pl.krktransit.schedule.contracts.v1.GetLineRoutesRequest;
+import pl.krktransit.schedule.contracts.v1.GetLineRoutesResponse;
 import pl.krktransit.schedule.contracts.v1.GetShapeRequest;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
 import pl.krktransit.schedule.contracts.v1.GetTripContextRequest;
@@ -40,6 +42,12 @@ public final class ScheduleGrpcEndpoint extends ScheduleServiceGrpc.ScheduleServ
     @Override
     public void getShape(GetShapeRequest request, StreamObserver<GetShapeResponse> observer) {
         respond("GetShape", observer, () -> responses.shape(queries.getShape(request.getHash(), request.getShapeId())));
+    }
+
+    @Override
+    public void getLineRoutes(GetLineRoutesRequest request,
+                              StreamObserver<GetLineRoutesResponse> observer) {
+        respond("GetLineRoutes", observer, () -> responses.lineRoutes(queries.getLineRoutes(request.getLineNumber())));
     }
 
     private FeedId feedId(GetCurrentHashRequest request) {

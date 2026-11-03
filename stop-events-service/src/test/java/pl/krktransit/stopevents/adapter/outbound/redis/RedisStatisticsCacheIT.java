@@ -2,12 +2,12 @@ package pl.krktransit.stopevents.adapter.outbound.redis;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.lettuce.core.AclSetuserArgs;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
-import io.lettuce.core.AclSetuserArgs;
-import io.lettuce.core.protocol.CommandType;
-import io.lettuce.core.protocol.CommandKeyword;
 import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.protocol.CommandKeyword;
+import io.lettuce.core.protocol.CommandType;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,6 +66,17 @@ class RedisStatisticsCacheIT {
             cache.put(kind, QUERY, result);
             assertThat(cache.get(kind, QUERY)).contains(result);
         });
+    }
+
+    @Test
+    void roundTripsDelayMapWithMissingBandsAndEmptySegments() {
+        var result = new DelayMap(List.of(new MapSegment("a|01", "b|", List.of(
+                new BandDelay(DelayBand.ALL_DAY, 1, -12.5, -12.5, -12.5),
+                new BandDelay(DelayBand.WEEKEND, 1, -12.5, -12.5, -12.5)))));
+        cache.put(Statistic.DELAY_MAP, QUERY, result);
+        assertThat(cache.get(Statistic.DELAY_MAP, QUERY)).contains(result);
+        cache.put(Statistic.DELAY_MAP, QUERY, new DelayMap(List.of()));
+        assertThat(cache.get(Statistic.DELAY_MAP, QUERY)).contains(new DelayMap(List.of()));
     }
 
     @Test
