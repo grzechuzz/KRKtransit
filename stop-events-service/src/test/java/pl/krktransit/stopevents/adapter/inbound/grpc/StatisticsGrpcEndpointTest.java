@@ -7,7 +7,6 @@ import io.grpc.*;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.MetadataUtils;
-import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -42,9 +41,8 @@ class StatisticsGrpcEndpointTest {
     }
 
     @Test
-    void allFiveMethodsReturnTypedResponsesWithTheOriginalQuery() throws IOException {
+    void allFourMethodsReturnTypedResponsesWithTheOriginalQuery() throws Exception {
         start((kind, query, cancellation) -> switch (kind) {
-            case DELAY_MAP -> new StatisticsResult.DelayMap(List.of());
             case MAX_DELAY -> new StatisticsResult.MaxDelay(0, List.of());
             case ROUTE_DELAY -> new StatisticsResult.RouteDelay(0, List.of());
             case PUNCTUALITY -> new StatisticsResult.Punctuality(4, 2, 1, 1);
@@ -57,8 +55,6 @@ class StatisticsGrpcEndpointTest {
         var trend = client.getTrend(REQUEST);
         assertThat(trend.getDays(0).getAvgDelaySeconds()).isEqualTo(42.5);
         assertThat(trend.getQuery()).isEqualTo(REQUEST);
-        assertThat(client.getDelayMap(REQUEST).getQuery()).isEqualTo(REQUEST);
-        assertThat(client.getDelayMap(REQUEST).getSegmentsList()).isEmpty();
     }
 
     @Test
@@ -117,7 +113,7 @@ class StatisticsGrpcEndpointTest {
         assertThat(cancelled.await(5, TimeUnit.SECONDS)).isTrue();
     }
 
-    private void start(StatisticsReader reader) throws IOException {
+    private void start(StatisticsReader reader) throws Exception {
         StatisticsCache cache = new StatisticsCache() {
             @Override public Optional<StatisticsResult> get(Statistic kind, StatisticsQuery query) { return Optional.empty(); }
             @Override public void put(Statistic kind, StatisticsQuery query, StatisticsResult result) {}

@@ -3,7 +3,6 @@ package pl.krktransit.stopevents.adapter.outbound.postgres;
 import java.time.LocalDate;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import pl.krktransit.stopevents.domain.statistics.DelayBand;
 import pl.krktransit.stopevents.domain.statistics.Statistic;
 import pl.krktransit.stopevents.domain.statistics.StatisticsQuery;
 
@@ -15,14 +14,6 @@ final class StatisticsSql {
     private static final int ON_TIME_SECONDS = 120;
     private static final int SLIGHTLY_DELAYED_SECONDS = 360;
     private static final int RANKING_LIMIT = 10;
-    private static final int WEEKEND_START = 6;
-    private static final int MORNING_START = 7;
-    private static final int MIDDAY_START = 9;
-    private static final int AFTERNOON_START = 15;
-    private static final int EVENING_START = 18;
-    private static final String STATISTICS_ZONE = "Europe/Warsaw";
-    private static final double MEDIAN = 0.5;
-    private static final double P90 = 0.9;
     // Estimated events are trusted only from the day Python deployed cross-batch validation.
     private static final LocalDate ESTIMATED_VALID_FROM = LocalDate.of(2026, 3, 19);
     private static final String FILTERED = """
@@ -104,47 +95,7 @@ final class StatisticsSql {
             SELECT EXISTS (SELECT 1 FROM recorded) AS has_data, d.*
             FROM (SELECT 1) s LEFT JOIN days d ON true ORDER BY service_date
             """;
-    private static final String DELAY_MAP = FILTERED + """
-            , consecutive AS (
-                SELECT service_date, stop_sequence, stop_name, stop_desc, delay_seconds, license_plate,
-                    lag(stop_sequence) OVER w AS prev_sequence, lag(stop_name) OVER w AS prev_name,
-                    lag(stop_desc) OVER w AS prev_desc, lag(planned_time) OVER w AS prev_planned,
-                    lag(delay_seconds) OVER w AS prev_delay, lag(license_plate) OVER w AS prev_plate
-                FROM filtered WINDOW w AS (PARTITION BY trip_id, service_date ORDER BY stop_sequence)
-            ), segments AS (
-                SELECT lower(prev_name) || '|' || lower(coalesce(prev_desc, '')) AS from_stop_key,
-                    lower(stop_name) || '|' || lower(coalesce(stop_desc, '')) AS to_stop_key,
-                    delay_seconds - prev_delay AS gain,
-                    CASE
-                        WHEN extract(isodow FROM service_date) >= :weekend_start THEN :weekend
-                        WHEN extract(hour FROM prev_planned AT TIME ZONE :zone) >= :morning_start
-                            AND extract(hour FROM prev_planned AT TIME ZONE :zone) < :midday_start THEN :morning
-                        WHEN extract(hour FROM prev_planned AT TIME ZONE :zone) >= :midday_start
-                            AND extract(hour FROM prev_planned AT TIME ZONE :zone) < :afternoon_start THEN :midday
-                        WHEN extract(hour FROM prev_planned AT TIME ZONE :zone) >= :afternoon_start
-                            AND extract(hour FROM prev_planned AT TIME ZONE :zone) < :evening_start THEN :afternoon
-                        ELSE :evening_night
-                    END AS band
-                FROM consecutive WHERE stop_sequence = prev_sequence + :step AND license_plate = prev_plate
-            ), aggregated AS (
-                SELECT from_stop_key, to_stop_key,
-                    CASE WHEN GROUPING(band) = 1 THEN :all_day ELSE band END AS band,
-                    count(*) AS samples, avg(gain) AS mean_gain,
-                    percentile_cont(ARRAY[CAST(:median AS double precision), CAST(:p90 AS double precision)])
-                        WITHIN GROUP (ORDER BY gain) AS percentiles
-                FROM segments GROUP BY from_stop_key, to_stop_key, GROUPING SETS ((band), ())
-            ), summary AS (
-                SELECT EXISTS (SELECT 1 FROM recorded) AS has_data
-            )
-            SELECT s.has_data, a.from_stop_key, a.to_stop_key, a.band, a.samples,
-                round(a.mean_gain::numeric, 1) AS mean_seconds,
-                round(a.percentiles[1]::numeric, 1) AS median_seconds,
-                round(a.percentiles[2]::numeric, 1) AS p90_seconds
-            FROM summary s LEFT JOIN aggregated a ON true
-            ORDER BY a.from_stop_key, a.to_stop_key, a.band
-            """;
     private static final Map<Statistic, String> STATEMENTS = Map.of(
-            Statistic.DELAY_MAP, DELAY_MAP,
             Statistic.MAX_DELAY, MAX_DELAY, Statistic.ROUTE_DELAY, ROUTE_DELAY,
             Statistic.PUNCTUALITY, PUNCTUALITY, Statistic.TREND, TREND);
 
@@ -159,16 +110,6 @@ final class StatisticsSql {
                 .addValue("observed", OBSERVED_METHOD).addValue("first", FIRST_SEQUENCE)
                 .addValue("second", SECOND_SEQUENCE).addValue("step", SEQUENCE_STEP)
                 .addValue("limit", RANKING_LIMIT).addValue("on_time", ON_TIME_SECONDS)
-                .addValue("slight", SLIGHTLY_DELAYED_SECONDS)
-                .addValue("weekend_start", WEEKEND_START).addValue("morning_start", MORNING_START)
-                .addValue("midday_start", MIDDAY_START).addValue("afternoon_start", AFTERNOON_START)
-                .addValue("evening_start", EVENING_START).addValue("zone", STATISTICS_ZONE)
-                .addValue("median", MEDIAN).addValue("p90", P90)
-                .addValue("all_day", DelayBand.ALL_DAY.name())
-                .addValue("morning", DelayBand.MORNING.name())
-                .addValue("midday", DelayBand.MIDDAY.name())
-                .addValue("afternoon", DelayBand.AFTERNOON.name())
-                .addValue("evening_night", DelayBand.EVENING_NIGHT.name())
-                .addValue("weekend", DelayBand.WEEKEND.name());
+                .addValue("slight", SLIGHTLY_DELAYED_SECONDS);
     }
 }

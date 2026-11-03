@@ -6,31 +6,6 @@ import pl.krktransit.stopevents.contracts.v1.*;
 import pl.krktransit.stopevents.domain.statistics.StatisticsResult;
 
 final class StatisticsResponseMapper {
-    DelayMapResponse delayMap(StatisticsRequest query, StatisticsResult.DelayMap result) {
-        var response = DelayMapResponse.newBuilder().setQuery(query);
-        result.segments().forEach(segment -> response.addSegments(DelayMapSegment.newBuilder()
-                .setFromStopKey(segment.fromStopKey()).setToStopKey(segment.toStopKey())
-                .addAllDelays(segment.delays().stream().map(this::bandDelay).toList())));
-        return response.build();
-    }
-
-    private BandDelay bandDelay(StatisticsResult.BandDelay delay) {
-        return BandDelay.newBuilder().setBand(band(delay.band())).setSamples(delay.samples())
-                .setMeanSeconds(delay.meanSeconds()).setMedianSeconds(delay.medianSeconds())
-                .setP90Seconds(delay.p90Seconds()).build();
-    }
-
-    private DelayBand band(pl.krktransit.stopevents.domain.statistics.DelayBand band) {
-        return switch (band) {
-            case ALL_DAY -> DelayBand.ALL_DAY;
-            case MORNING -> DelayBand.MORNING;
-            case MIDDAY -> DelayBand.MIDDAY;
-            case AFTERNOON -> DelayBand.AFTERNOON;
-            case EVENING_NIGHT -> DelayBand.EVENING_NIGHT;
-            case WEEKEND -> DelayBand.WEEKEND;
-        };
-    }
-
     MaxDelayResponse maxDelay(StatisticsRequest query, StatisticsResult.MaxDelay result) {
         var response = MaxDelayResponse.newBuilder().setQuery(query).setTripsAnalyzed(result.tripsAnalyzed());
         result.segments().forEach(segment -> response.addMaxDelay(segment(segment)));

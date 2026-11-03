@@ -4,7 +4,6 @@ import io.grpc.Channel;
 import io.grpc.StatusRuntimeException;
 import java.util.function.Function;
 import pl.krktransit.publicapi.application.ApiFailure;
-import pl.krktransit.publicapi.application.statistics.DelayMapStatistics;
 import pl.krktransit.publicapi.application.statistics.MaxDelayRanking;
 import pl.krktransit.publicapi.application.statistics.Punctuality;
 import pl.krktransit.publicapi.application.statistics.RouteDelayRanking;
@@ -22,11 +21,6 @@ public final class GrpcStatisticsSource implements StatisticsSource {
 
     public GrpcStatisticsSource(Channel channel, GrpcCallSettings settings) {
         this.calls = new GrpcCalls<>(StatisticsServiceGrpc.newBlockingStub(channel), settings);
-    }
-
-    @Override
-    public DelayMapStatistics delayMap(StatisticsQuery query) {
-        return mapper.delayMap(call(query, stub -> stub.getDelayMap(mapper.request(query))));
     }
 
     @Override

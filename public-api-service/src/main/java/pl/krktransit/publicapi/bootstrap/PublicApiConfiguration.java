@@ -10,7 +10,6 @@ import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcPredictionSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcScheduleSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcStatisticsSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcVehiclePositionsSource;
-import pl.krktransit.publicapi.application.delaymap.LineDelayMap;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
@@ -51,7 +50,7 @@ class PublicApiConfiguration {
         var settings = properties.schedule();
         var client = new GrpcScheduleSource(scheduleChannel, settings.calls(), settings.maximumConcurrentLookups());
         return new CachedScheduleSource(client, settings.tripCacheSize(), settings.tripStopsCacheSize(),
-                settings.hashRefresh(), settings.lineRoutesCacheSize(), settings.lineRoutesCacheTtl(), clock);
+                settings.hashRefresh(), clock);
     }
 
     @Bean
@@ -68,11 +67,6 @@ class PublicApiConfiguration {
 
     @Bean
     LineStatistics lineStatistics(StatisticsSource statistics) { return new LineStatistics(statistics); }
-
-    @Bean
-    LineDelayMap lineDelayMap(ScheduleSource schedule, StatisticsSource statistics) {
-        return new LineDelayMap(schedule, statistics);
-    }
 
     @Bean
     ScheduleLookups scheduleLookups(ScheduleSource schedule) { return new ScheduleLookups(schedule); }

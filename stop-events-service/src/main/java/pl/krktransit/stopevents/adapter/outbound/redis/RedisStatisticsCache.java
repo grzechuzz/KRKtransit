@@ -9,13 +9,13 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import pl.krktransit.stopevents.application.statistics.StatisticsCache;
 import pl.krktransit.stopevents.domain.statistics.Statistic;
 import pl.krktransit.stopevents.domain.statistics.StatisticsQuery;
 import pl.krktransit.stopevents.domain.statistics.StatisticsResult;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.json.JsonMapper;
 
 public final class RedisStatisticsCache implements StatisticsCache, AutoCloseable {
     private static final System.Logger LOG = System.getLogger(RedisStatisticsCache.class.getName());
@@ -113,7 +113,6 @@ public final class RedisStatisticsCache implements StatisticsCache, AutoCloseabl
 
     private static Class<? extends StatisticsResult> resultType(Statistic statistic) {
         return switch (statistic) {
-            case DELAY_MAP -> StatisticsResult.DelayMap.class;
             case MAX_DELAY -> StatisticsResult.MaxDelay.class;
             case ROUTE_DELAY -> StatisticsResult.RouteDelay.class;
             case PUNCTUALITY -> StatisticsResult.Punctuality.class;

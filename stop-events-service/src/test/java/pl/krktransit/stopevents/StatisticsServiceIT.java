@@ -8,7 +8,6 @@ import io.grpc.*;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.lettuce.core.RedisClient;
-import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,7 +36,7 @@ class StatisticsServiceIT {
     @Container private static final OwnedRedis REDIS = new OwnedRedis();
 
     @Test
-    void servesFiveSqlBackedRpcsAndUsesRedisWhileKeepingOutagesDistinctFromMissingData() throws IOException, InterruptedException {
+    void servesFourSqlBackedRpcsAndUsesRedisWhileKeepingOutagesDistinctFromMissingData() throws Exception {
         MigrationCommand.migrate(DATABASE.dataSource());
         new JdbcStopEventStore(DATABASE.dataSource()).insert(List.of(event(2, 60, BASE), event(3, 180, BASE.plusSeconds(600))));
         var sql = new JdbcStatisticsReader(DATABASE.dataSource(), Set.of(SOURCE));
@@ -66,18 +65,13 @@ class StatisticsServiceIT {
                 assertThat(client.getRouteDelay(request).getTripsAnalyzed()).isEqualTo(1);
                 assertThat(client.getPunctuality(request).getTotalStops()).isEqualTo(2);
                 assertThat(client.getTrend(request).getDays(0).getAvgDelaySeconds()).isEqualTo(120.0);
-                assertThat(client.getDelayMap(request).getSegments(0).getDelaysList()).allSatisfy(delay -> {
-                    assertThat(delay.getSamples()).isEqualTo(1);
-                    assertThat(delay.getMeanSeconds()).isEqualTo(120);
-                });
-                assertThat(reads).hasValue(5);
+                assertThat(reads).hasValue(4);
                 offline.set(true);
                 assertThat(client.getMaxDelay(request).getTripsAnalyzed()).isEqualTo(1);
                 assertThat(client.getRouteDelay(request).getTripsAnalyzed()).isEqualTo(1);
                 assertThat(client.getPunctuality(request).getOnTimeCount()).isEqualTo(1);
                 assertThat(client.getTrend(request).getDays(0).getTripsCount()).isEqualTo(1);
-                assertThat(client.getDelayMap(request).getSegmentsCount()).isEqualTo(1);
-                assertThat(reads).hasValue(5);
+                assertThat(reads).hasValue(4);
                 var unknown = request.toBuilder().setLineNumber("999").build();
                 assertThatThrownBy(() -> client.getTrend(unknown)).isInstanceOfSatisfying(StatusRuntimeException.class,
                         failure -> assertThat(failure.getStatus().getCode()).isEqualTo(Status.Code.UNAVAILABLE));

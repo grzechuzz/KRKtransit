@@ -16,15 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import pl.krktransit.stopevents.domain.statistics.Statistic;
 import pl.krktransit.stopevents.domain.statistics.StatisticsQuery;
 import pl.krktransit.stopevents.domain.statistics.StatisticsResult;
@@ -36,25 +32,7 @@ class StatisticsQueriesTest {
             new StatisticsResult.Day(QUERY.startDate(), 42.5, 3)));
 
     @Test
-    void delayMapUsesItsOwnCacheKeyAndCanReuseAnEmptyResult() {
-        var calls = new AtomicInteger();
-        var result = new StatisticsResult.DelayMap(List.of());
-        StatisticsReader reader = (kind, query, cancellation) -> {
-            calls.incrementAndGet();
-            return kind == Statistic.DELAY_MAP ? result : RESULT;
-        };
-        try (var queries = service(reader, new MemoryCache(), 4)) {
-            assertThat(queries.get(Statistic.DELAY_MAP, QUERY, new QueryCancellation())).isEqualTo(result);
-            assertThat(queries.get(Statistic.DELAY_MAP, QUERY, new QueryCancellation())).isEqualTo(result);
-            assertThat(queries.get(Statistic.TREND, QUERY, new QueryCancellation())).isEqualTo(RESULT);
-            assertThat(calls).hasValue(2);
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = Statistic.class, names = {"TREND", "DELAY_MAP"})
-    void concurrentColdRequestsShareOneCalculation(Statistic statistic) throws InterruptedException, ExecutionException, TimeoutException {
-        StatisticsResult expected = statistic == Statistic.DELAY_MAP ? new StatisticsResult.DelayMap(List.of()) : RESULT;
+    void concurrentColdRequestsShareOneCalculation() throws Exception {
         int clients = 20;
         var arrivals = new CountDownLatch(clients);
         var reads = new AtomicInteger();
@@ -68,12 +46,12 @@ class StatisticsQueriesTest {
                 return value;
             }
         };
-        StatisticsReader reader = (kind, query, cancellation) -> { reads.incrementAndGet(); return expected; };
+        StatisticsReader reader = (kind, query, cancellation) -> { reads.incrementAndGet(); return RESULT; };
         try (var queries = service(reader, cache, 4);
              var callers = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("client-", 0).factory())) {
             var results = new ArrayList<java.util.concurrent.Future<StatisticsResult>>();
-            for (int i = 0; i < clients; i++) results.add(callers.submit(() -> queries.get(statistic, QUERY, new QueryCancellation())));
-            for (var result : results) assertThat(result.get(5, TimeUnit.SECONDS)).isEqualTo(expected);
+            for (int i = 0; i < clients; i++) results.add(callers.submit(() -> queries.get(Statistic.TREND, QUERY, new QueryCancellation())));
+            for (var result : results) assertThat(result.get(5, TimeUnit.SECONDS)).isEqualTo(RESULT);
             assertThat(reads).hasValue(1);
         }
     }

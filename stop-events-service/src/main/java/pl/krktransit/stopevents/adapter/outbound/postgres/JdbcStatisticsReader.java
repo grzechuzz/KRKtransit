@@ -17,7 +17,6 @@ import pl.krktransit.stopevents.application.statistics.QueryCancellation;
 import pl.krktransit.stopevents.application.statistics.StatisticsFailure;
 import pl.krktransit.stopevents.application.statistics.StatisticsReader;
 import pl.krktransit.stopevents.domain.source.SourceId;
-import pl.krktransit.stopevents.domain.statistics.DelayBand;
 import pl.krktransit.stopevents.domain.statistics.Statistic;
 import pl.krktransit.stopevents.domain.statistics.StatisticsQuery;
 import pl.krktransit.stopevents.domain.statistics.StatisticsResult;
@@ -54,37 +53,12 @@ public final class JdbcStatisticsReader implements StatisticsReader {
         if (!rows.getBoolean("has_data")) throw new StatisticsFailure(StatisticsFailure.Kind.NOT_FOUND, "No statistics data for line and date range");
         cancellation.check();
         return switch (statistic) {
-            case DELAY_MAP -> delayMap(rows, cancellation);
             case MAX_DELAY -> maxDelay(rows, cancellation);
             case ROUTE_DELAY -> routeDelay(rows, cancellation);
             case PUNCTUALITY -> new Punctuality(rows.getLong("total"), rows.getLong("on_time"),
                     rows.getLong("slight"), rows.getLong("delayed"));
             case TREND -> trend(rows, cancellation);
         };
-    }
-
-    private DelayMap delayMap(ResultSet rows, QueryCancellation cancellation) throws SQLException {
-        var segments = new ArrayList<MapSegment>();
-        var delays = new ArrayList<BandDelay>();
-        String from = null;
-        String to = null;
-        do {
-            cancellation.check();
-            String nextFrom = rows.getString("from_stop_key");
-            if (nextFrom == null) continue;
-            String nextTo = rows.getString("to_stop_key");
-            if (!nextFrom.equals(from) || !nextTo.equals(to)) {
-                if (from != null) segments.add(new MapSegment(from, to, delays));
-                from = nextFrom;
-                to = nextTo;
-                delays.clear();
-            }
-            delays.add(new BandDelay(DelayBand.valueOf(rows.getString("band")),
-                    rows.getLong("samples"), rows.getDouble("mean_seconds"), rows.getDouble("median_seconds"),
-                    rows.getDouble("p90_seconds")));
-        } while (rows.next());
-        if (from != null) segments.add(new MapSegment(from, to, delays));
-        return new DelayMap(segments);
     }
 
     private MaxDelay maxDelay(ResultSet rows, QueryCancellation cancellation) throws SQLException {

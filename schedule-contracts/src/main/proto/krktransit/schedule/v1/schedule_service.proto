@@ -12,7 +12,6 @@ service ScheduleService {
   rpc GetCurrentHash(GetCurrentHashRequest) returns (GetCurrentHashResponse);
   rpc GetTripContext(GetTripContextRequest) returns (GetTripContextResponse);
   rpc GetShape(GetShapeRequest) returns (GetShapeResponse);
-  rpc GetLineRoutes(GetLineRoutesRequest) returns (GetLineRoutesResponse);
 }
 
 message FeedId {
@@ -83,38 +82,4 @@ message ShapePoint {
   optional double latitude = 1;
   optional double longitude = 2;
   optional int32 sequence = 3;
-}
-
-message GetLineRoutesRequest {
-  optional string line_number = 1;
-}
-
-message GetLineRoutesResponse {
-  repeated LineDirection directions = 1;
-}
-
-message LineDirection {
-  optional string headsign = 1;
-  optional int64 trips_count = 2;
-  repeated RouteStop stops = 3;
-  repeated RouteSegment segments = 4;
-}
-
-message RouteStop {
-  optional string stop_key = 1;
-  optional string stop_name = 2;
-  optional string stop_desc = 3;
-  optional double latitude = 4;
-  optional double longitude = 5;
-}
-
-message RouteSegment {
-  optional string from_stop_key = 1;
-  optional string to_stop_key = 2;
-  repeated RoutePoint points = 3;
-}
-
-message RoutePoint {
-  optional double latitude = 1;
-  optional double longitude = 2;
 }

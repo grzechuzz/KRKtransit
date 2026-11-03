@@ -19,10 +19,6 @@ import pl.krktransit.publicapi.application.statistics.SegmentDelay;
 import pl.krktransit.publicapi.application.statistics.StatisticsQuery;
 import pl.krktransit.publicapi.application.statistics.TrendDay;
 import pl.krktransit.publicapi.support.FakeUpstreams;
-import pl.krktransit.stopevents.contracts.v1.BandDelay;
-import pl.krktransit.stopevents.contracts.v1.DelayBand;
-import pl.krktransit.stopevents.contracts.v1.DelayMapResponse;
-import pl.krktransit.stopevents.contracts.v1.DelayMapSegment;
 import pl.krktransit.stopevents.contracts.v1.MaxDelayResponse;
 import pl.krktransit.stopevents.contracts.v1.PunctualityResponse;
 import pl.krktransit.stopevents.contracts.v1.TrendResponse;
@@ -39,27 +35,6 @@ class GrpcStatisticsSourceTest {
     void close() {
         channel.shutdownNow();
         upstreams.close();
-    }
-
-    @Test
-    void mapsDelayMapWithoutInventingMissingBandsAndPreservesNegativeValues() {
-        upstreams.statistics.delayMap = DelayMapResponse.newBuilder()
-                .addSegments(DelayMapSegment.newBuilder()
-                        .setFromStopKey("a|01").setToStopKey("b|")
-                        .addDelays(BandDelay.newBuilder()
-                                .setBand(DelayBand.ALL_DAY).setSamples(3)
-                                .setMeanSeconds(-10.5).setMedianSeconds(-11).setP90Seconds(1.2))).build();
-        var result = source.delayMap(QUERY);
-        assertThat(result.segments()).singleElement().satisfies(segment -> {
-            assertThat(segment.fromStopKey()).isEqualTo("a|01");
-            assertThat(segment.delays()).containsExactly(new pl.krktransit.publicapi.application.statistics.BandDelay(
-                    pl.krktransit.publicapi.application.statistics.DelayBand.ALL_DAY, 3, -10.5, -11, 1.2));
-        });
-        assertThat(upstreams.statistics.lastRequest.getIncludeEstimated()).isTrue();
-        upstreams.statistics.failure = Status.NOT_FOUND;
-        assertThatThrownBy(() -> source.delayMap(QUERY)).isInstanceOf(ApiFailure.NotFound.class);
-        upstreams.statistics.failure = Status.DEADLINE_EXCEEDED;
-        assertThatThrownBy(() -> source.delayMap(QUERY)).isInstanceOf(ApiFailure.UpstreamUnavailable.class);
     }
 
     @Test

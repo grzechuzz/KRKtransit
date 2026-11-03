@@ -2,7 +2,6 @@ package pl.krktransit.publicapi.support;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import pl.krktransit.stopevents.contracts.v1.DelayMapResponse;
 import pl.krktransit.stopevents.contracts.v1.MaxDelayResponse;
 import pl.krktransit.stopevents.contracts.v1.PunctualityResponse;
 import pl.krktransit.stopevents.contracts.v1.RouteDelayResponse;
@@ -11,8 +10,6 @@ import pl.krktransit.stopevents.contracts.v1.StatisticsServiceGrpc;
 import pl.krktransit.stopevents.contracts.v1.TrendResponse;
 
 public final class FakeStatisticsService extends StatisticsServiceGrpc.StatisticsServiceImplBase {
-    public volatile DelayMapResponse delayMap = DelayMapResponse.getDefaultInstance();
-    public final java.util.concurrent.atomic.AtomicInteger delayMapCalls = new java.util.concurrent.atomic.AtomicInteger();
     public volatile MaxDelayResponse maxDelay = MaxDelayResponse.getDefaultInstance();
     public volatile RouteDelayResponse routeDelay = RouteDelayResponse.getDefaultInstance();
     public volatile PunctualityResponse punctuality = PunctualityResponse.getDefaultInstance();
@@ -21,20 +18,12 @@ public final class FakeStatisticsService extends StatisticsServiceGrpc.Statistic
     public volatile StatisticsRequest lastRequest;
 
     public void reset() {
-        delayMap = DelayMapResponse.getDefaultInstance();
-        delayMapCalls.set(0);
         maxDelay = MaxDelayResponse.getDefaultInstance();
         routeDelay = RouteDelayResponse.getDefaultInstance();
         punctuality = PunctualityResponse.getDefaultInstance();
         trend = TrendResponse.getDefaultInstance();
         failure = null;
         lastRequest = null;
-    }
-
-    @Override
-    public void getDelayMap(StatisticsRequest request, StreamObserver<DelayMapResponse> observer) {
-        delayMapCalls.incrementAndGet();
-        respond(request, delayMap, observer);
     }
 
     @Override

@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.publicapi.application.schedule.FeedId;
-import pl.krktransit.publicapi.application.schedule.LineRoutes;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.TripStops;
@@ -137,10 +136,6 @@ class LiveVehiclesTest {
     }
 
     private static final class Schedule implements ScheduleSource {
-        @Override public LineRoutes lineRoutes(String lineNumber) {
-            return new LineRoutes(java.util.List.of());
-        }
-
         private final Map<FeedId, String> hashes = new HashMap<>();
         private final Map<String, TripSummary> trips = new HashMap<>();
         private final List<FeedId> unavailable = new ArrayList<>();
