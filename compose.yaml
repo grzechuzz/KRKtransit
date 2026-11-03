@@ -35,7 +35,7 @@ services:
     image: postgres:17.11
     restart: unless-stopped
     logging: *logging
-    command: ["postgres", "-c", "shared_buffers=1GB"]
+    command: ["postgres", "-c", "shared_buffers=1GB", "-c", "work_mem=64MB", "-c", "jit=off", "-c", "random_page_cost=1.1"]
     environment:
       POSTGRES_DB: krktransit
       POSTGRES_USER: krktransit_admin

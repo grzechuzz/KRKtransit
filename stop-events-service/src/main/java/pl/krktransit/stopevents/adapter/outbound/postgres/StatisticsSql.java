@@ -48,21 +48,28 @@ final class StatisticsSql {
             ORDER BY generated_delay DESC, trip_id, service_date, stop_sequence
             """;
     private static final String ROUTE_DELAY = FILTERED + """
-            , vehicles AS (
-                SELECT trip_id, service_date FROM filtered GROUP BY trip_id, service_date
-                HAVING count(DISTINCT license_plate) = 1
+            , trips AS (
+                SELECT trip_id, service_date, min(license_plate) AS license_plate, max(license_plate) AS last_plate,
+                    max(max_stop_sequence) FILTER (WHERE stop_sequence = :second) AS first_max_sequence,
+                    max(stop_sequence) FILTER (WHERE stop_sequence = max_stop_sequence - :step) AS last_sequence,
+                    max(line_number) FILTER (WHERE stop_sequence = :second) AS line_number,
+                    max(headsign) FILTER (WHERE stop_sequence = :second) AS headsign,
+                    max(stop_name) FILTER (WHERE stop_sequence = :second) AS first_name,
+                    max(stop_name) FILTER (WHERE stop_sequence = max_stop_sequence - :step) AS last_name,
+                    max(planned_time) FILTER (WHERE stop_sequence = :second) AS first_planned,
+                    max(planned_time) FILTER (WHERE stop_sequence = max_stop_sequence - :step) AS last_planned,
+                    max(event_time) FILTER (WHERE stop_sequence = :second) AS first_time,
+                    max(event_time) FILTER (WHERE stop_sequence = max_stop_sequence - :step) AS last_time,
+                    max(delay_seconds) FILTER (WHERE stop_sequence = :second) AS start_delay,
+                    max(delay_seconds) FILTER (WHERE stop_sequence = max_stop_sequence - :step) AS end_delay,
+                    bool_or(is_estimated) FILTER (WHERE stop_sequence = :second
+                        OR stop_sequence = max_stop_sequence - :step) AS estimated
+                FROM filtered GROUP BY trip_id, service_date
             ), eligible AS (
-                SELECT a.trip_id, a.service_date, a.line_number, a.license_plate, a.headsign,
-                    a.stop_name AS first_name, b.stop_name AS last_name,
-                    a.planned_time AS first_planned, b.planned_time AS last_planned,
-                    a.event_time AS first_time, b.event_time AS last_time,
-                    a.delay_seconds AS start_delay, b.delay_seconds AS end_delay,
-                    b.delay_seconds - a.delay_seconds AS generated_delay,
-                    (a.is_estimated OR b.is_estimated) AS estimated
-                FROM filtered a JOIN filtered b ON a.trip_id = b.trip_id AND a.service_date = b.service_date
-                    AND b.stop_sequence = a.max_stop_sequence - :step
-                JOIN vehicles v ON a.trip_id = v.trip_id AND a.service_date = v.service_date
-                WHERE a.stop_sequence = :second
+                SELECT trip_id, service_date, line_number, license_plate, headsign, first_name, last_name,
+                    first_planned, last_planned, first_time, last_time, start_delay, end_delay,
+                    end_delay - start_delay AS generated_delay, estimated
+                FROM trips WHERE license_plate = last_plate AND last_sequence = first_max_sequence - :step
             ), summary AS (
                 SELECT EXISTS (SELECT 1 FROM recorded) AS has_data,
                     (SELECT count(DISTINCT (trip_id, service_date)) FROM eligible) AS trips_analyzed
