@@ -33,7 +33,7 @@ public-api:
   statistics:
     address: ${PUBLIC_API_STATISTICS_ADDRESS:static://127.0.0.1:9092}
     token: ${PUBLIC_API_STATISTICS_TOKEN:}
-    deadline: 30s
+    deadline: 300s
   schedule:
     address: ${PUBLIC_API_SCHEDULE_ADDRESS:static://127.0.0.1:9090}
     token: ${PUBLIC_API_SCHEDULE_TOKEN:}
