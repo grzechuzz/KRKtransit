@@ -13,6 +13,7 @@ service StatisticsService {
   rpc GetRouteDelay(StatisticsRequest) returns (RouteDelayResponse);
   rpc GetPunctuality(StatisticsRequest) returns (PunctualityResponse);
   rpc GetTrend(StatisticsRequest) returns (TrendResponse);
+  rpc GetDelayMap(StatisticsRequest) returns (DelayMapResponse);
 }
 
 message StatisticsRequest {
@@ -90,4 +91,33 @@ message TrendDay {
   optional string date = 1;
   optional double avg_delay_seconds = 2;
   optional int64 trips_count = 3;
+}
+
+message DelayMapResponse {
+  StatisticsRequest query = 1;
+  repeated DelayMapSegment segments = 2;
+}
+
+message DelayMapSegment {
+  optional string from_stop_key = 1;
+  optional string to_stop_key = 2;
+  repeated BandDelay delays = 3;
+}
+
+enum DelayBand {
+  DELAY_BAND_UNSPECIFIED = 0;
+  ALL_DAY = 1;
+  MORNING = 2;
+  MIDDAY = 3;
+  AFTERNOON = 4;
+  EVENING_NIGHT = 5;
+  WEEKEND = 6;
+}
+
+message BandDelay {
+  optional DelayBand band = 1;
+  optional int64 samples = 2;
+  optional double mean_seconds = 3;
+  optional double median_seconds = 4;
+  optional double p90_seconds = 5;
 }
