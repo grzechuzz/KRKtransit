@@ -16,7 +16,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
-import pl.krktransit.publicapi.application.schedule.LineRoutes;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.TripStop;
@@ -30,22 +29,7 @@ class CachedScheduleSourceTest {
     private static final TripSummary SUMMARY = new TripSummary("194", "Krowodrza", null);
     private final MutableClock clock = new MutableClock(Instant.parse("2026-10-30T10:00:00Z"));
     private final Delegate delegate = new Delegate();
-    private final CachedScheduleSource cache = new CachedScheduleSource(delegate, 100, 100, Duration.ofSeconds(30), 512, Duration.ofMinutes(5), clock);
-
-    @Test
-    void cachesLineRoutesIncludingEmptyResultsUntilExpiryButNeverCachesFailures() {
-        assertThat(cache.lineRoutes("198").directions()).isEmpty();
-        cache.lineRoutes("198");
-        assertThat(delegate.routeRequests).containsExactly("198");
-        clock.advance(Duration.ofMinutes(5));
-        cache.lineRoutes("198");
-        assertThat(delegate.routeRequests).containsExactly("198", "198");
-        delegate.routeFailure = new ApiFailure.UpstreamUnavailable("Schedule service", null);
-        assertThatThrownBy(() -> cache.lineRoutes("999")).isInstanceOf(ApiFailure.UpstreamUnavailable.class);
-        delegate.routeFailure = null;
-        cache.lineRoutes("999");
-        assertThat(delegate.routeRequests).containsExactly("198", "198", "999", "999");
-    }
+    private final CachedScheduleSource cache = new CachedScheduleSource(delegate, 100, 100, Duration.ofSeconds(30), clock);
 
     @Test
     void remembersFoundAndMissingTripsPerScheduleVersionButRetriesUnresolvedOnes() {
@@ -101,14 +85,6 @@ class CachedScheduleSourceTest {
     }
 
     private static final class Delegate implements ScheduleSource {
-        private final List<String> routeRequests = new ArrayList<>();
-        private ApiFailure routeFailure;
-        @Override public LineRoutes lineRoutes(String lineNumber) {
-            routeRequests.add(lineNumber);
-            if (routeFailure != null) throw routeFailure;
-            return new LineRoutes(java.util.List.of());
-        }
-
         private final Map<String, TripSummary> found = new HashMap<>();
         private final Set<String> missing = new HashSet<>();
         private final List<Set<String>> requests = new ArrayList<>();

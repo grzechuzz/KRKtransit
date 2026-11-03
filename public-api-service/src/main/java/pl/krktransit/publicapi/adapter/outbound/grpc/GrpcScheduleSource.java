@@ -13,7 +13,6 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
-import pl.krktransit.publicapi.application.schedule.LineRoutes;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.TripStops;
@@ -35,15 +34,6 @@ public final class GrpcScheduleSource implements ScheduleSource {
         if (maximumConcurrentLookups <= 0) throw new IllegalArgumentException("Concurrent lookups must be positive");
         this.calls = new GrpcCalls<>(ScheduleServiceGrpc.newBlockingStub(channel), settings);
         this.lookupPermits = new Semaphore(maximumConcurrentLookups);
-    }
-
-    @Override
-    public LineRoutes lineRoutes(String lineNumber) {
-        try {
-            return mapper.lineRoutes(calls.next().getLineRoutes(mapper.lineRoutesRequest(lineNumber)));
-        } catch (StatusRuntimeException failure) {
-            throw failures.translate(failure);
-        }
     }
 
     @Override

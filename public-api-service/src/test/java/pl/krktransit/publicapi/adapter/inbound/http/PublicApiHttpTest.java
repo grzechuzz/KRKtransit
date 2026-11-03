@@ -34,19 +34,10 @@ import pl.krktransit.prediction.contracts.v1.PredictedArrival;
 import pl.krktransit.publicapi.bootstrap.PublicApiApplication;
 import pl.krktransit.publicapi.bootstrap.PublicApiProperties;
 import pl.krktransit.publicapi.support.FakeUpstreams;
-import pl.krktransit.schedule.contracts.v1.GetLineRoutesResponse;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
 import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
-import pl.krktransit.schedule.contracts.v1.LineDirection;
-import pl.krktransit.schedule.contracts.v1.RoutePoint;
-import pl.krktransit.schedule.contracts.v1.RouteSegment;
-import pl.krktransit.schedule.contracts.v1.RouteStop;
 import pl.krktransit.schedule.contracts.v1.ShapePoint;
 import pl.krktransit.schedule.contracts.v1.TripStop;
-import pl.krktransit.stopevents.contracts.v1.BandDelay;
-import pl.krktransit.stopevents.contracts.v1.DelayBand;
-import pl.krktransit.stopevents.contracts.v1.DelayMapResponse;
-import pl.krktransit.stopevents.contracts.v1.DelayMapSegment;
 import pl.krktransit.stopevents.contracts.v1.MaxDelayResponse;
 import pl.krktransit.stopevents.contracts.v1.PunctualityResponse;
 import pl.krktransit.stopevents.contracts.v1.RouteDelay;
@@ -86,79 +77,6 @@ class PublicApiHttpTest {
 
     @AfterAll
     static void stopUpstreams() { UPSTREAMS.close(); }
-
-    @Test
-    void delayMapJoinsGeometryWithStatisticsAndSerializesCoordinatePairs() {
-        var direction = LineDirection.newBuilder().setHeadsign("End").setTripsCount(42)
-                .addStops(RouteStop.newBuilder().setStopKey("a|01").setStopName("A")
-                        .setStopDesc("01").setLatitude(50).setLongitude(19))
-                .addSegments(RouteSegment.newBuilder().setFromStopKey("a|01").setToStopKey("b|")
-                        .addPoints(RoutePoint.newBuilder().setLatitude(50).setLongitude(19))
-                        .addPoints(RoutePoint.newBuilder().setLatitude(51).setLongitude(20)))
-                .addSegments(RouteSegment.newBuilder().setFromStopKey("b|").setToStopKey("a|01")
-                        .addPoints(RoutePoint.newBuilder().setLatitude(51).setLongitude(20))
-                        .addPoints(RoutePoint.newBuilder().setLatitude(50).setLongitude(19)));
-        UPSTREAMS.schedule.lineRoutes.put("D01", GetLineRoutesResponse.newBuilder()
-                .addDirections(direction).build());
-        UPSTREAMS.statistics.delayMap = DelayMapResponse.newBuilder()
-                .addSegments(DelayMapSegment.newBuilder().setFromStopKey("a|01").setToStopKey("b|")
-                        .addDelays(BandDelay.newBuilder()
-                                .setBand(DelayBand.ALL_DAY).setSamples(3)
-                                .setMeanSeconds(-10.5).setMedianSeconds(-11).setP90Seconds(1.2)))
-                .addSegments(DelayMapSegment.newBuilder().setFromStopKey("old|").setToStopKey("route|"))
-                .build();
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> call(get("/v1/lines/D01/stats/delay-map" + STATISTICS_QUERY))
-                .andExpect(status().isOk()).andExpect(content().json("""
-                        {"line_number":"D01","start_date":"2026-10-01","end_date":"2026-10-07","directions":[
-                          {"headsign":"End","trips_count":42,"stops":[{"stop_key":"a|01","stop_name":"A","stop_desc":"01","latitude":50,"longitude":19}],
-                           "segments":[{"from_stop_key":"a|01","to_stop_key":"b|","points":[[50,19],[51,20]],
-                             "delays":[{"band":"ALL_DAY","samples":3,"mean_seconds":-10.5,"median_seconds":-11,"p90_seconds":1.2}]},
-                             {"from_stop_key":"b|","to_stop_key":"a|01","points":[[51,20],[50,19]],"delays":[]}]}]}
-                        """, JsonCompareMode.STRICT)));
-        assertThat(UPSTREAMS.schedule.lastLineNumber).isEqualTo("D01");
-        assertThat(UPSTREAMS.statistics.lastRequest.getIncludeEstimated()).isFalse();
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> call(get("/v1/lines/D01/stats/delay-map" + STATISTICS_QUERY
-                + "&include_estimated=true")).andExpect(status().isOk()));
-        assertThat(UPSTREAMS.statistics.lastRequest.getIncludeEstimated()).isTrue();
-        assertThat(UPSTREAMS.schedule.lineRoutesCalls).hasValue(1);
-        assertThat(UPSTREAMS.statistics.delayMapCalls).hasValue(2);
-    }
-
-    @Test
-    void delayMapKeepsNoRoutesDistinctFromNoEventsAndUpstreamFailures() {
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
-            call(get("/v1/lines/D02/stats/delay-map" + STATISTICS_QUERY)).andExpect(status().isOk())
-                    .andExpect(content().json("""
-                            {"line_number":"D02","start_date":"2026-10-01","end_date":"2026-10-07","directions":[]}
-                            """, JsonCompareMode.STRICT));
-            assertThat(UPSTREAMS.statistics.delayMapCalls).hasValue(1);
-            UPSTREAMS.statistics.failure = Status.NOT_FOUND;
-            call(get("/v1/lines/D02/stats/delay-map" + STATISTICS_QUERY)).andExpect(status().isNotFound());
-            UPSTREAMS.statistics.failure = Status.INVALID_ARGUMENT;
-            call(get("/v1/lines/D02/stats/delay-map" + STATISTICS_QUERY)).andExpect(status().isUnprocessableContent());
-            UPSTREAMS.statistics.failure = Status.DEADLINE_EXCEEDED;
-            call(get("/v1/lines/D02/stats/delay-map" + STATISTICS_QUERY)).andExpect(status().isBadGateway());
-            UPSTREAMS.statistics.failure = Status.RESOURCE_EXHAUSTED;
-            call(get("/v1/lines/D02/stats/delay-map" + STATISTICS_QUERY)).andExpect(status().isServiceUnavailable());
-            UPSTREAMS.schedule.failure = Status.UNAVAILABLE;
-            int callsBefore = UPSTREAMS.statistics.delayMapCalls.get();
-            call(get("/v1/lines/D03/stats/delay-map" + STATISTICS_QUERY)).andExpect(status().isBadGateway());
-            assertThat(UPSTREAMS.statistics.delayMapCalls).hasValue(callsBefore);
-        });
-    }
-
-    @Test
-    void delayMapRequiresDatesAndHasItsOwnConfiguredRateLimit() {
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
-            call(get("/v1/lines/D04/stats/delay-map")).andExpect(status().isUnprocessableContent());
-            assertThat(properties.rateLimits().perMinuteByRoute()).containsEntry("/v1/lines/{line_number}/stats/delay-map", 20);
-            for (int index = 0; index < 20; index++) {
-                mvc.perform(withClient(get("/v1/lines/D04/stats/delay-map" + STATISTICS_QUERY), "203.0.113.201")).andExpect(status().isOk());
-            }
-            mvc.perform(withClient(get("/v1/lines/D04/stats/delay-map" + STATISTICS_QUERY), "203.0.113.201")).andExpect(status().isTooManyRequests());
-            mvc.perform(withClient(get("/v1/lines/D04/stats/delay-map" + STATISTICS_QUERY), "203.0.113.202")).andExpect(status().isOk());
-        });
-    }
 
     @Test
     void maxDelayKeepsThePythonContractAndForwardsTheQuery() throws Exception {

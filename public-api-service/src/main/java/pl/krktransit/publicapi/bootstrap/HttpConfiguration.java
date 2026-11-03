@@ -3,16 +3,15 @@ package pl.krktransit.publicapi.bootstrap;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import pl.krktransit.publicapi.adapter.inbound.http.HealthController;
 import pl.krktransit.publicapi.adapter.inbound.http.error.ApiErrorAttributes;
 import pl.krktransit.publicapi.adapter.inbound.http.error.ApiExceptionHandler;
 import pl.krktransit.publicapi.adapter.inbound.http.ratelimit.ClientRateLimits;
+import pl.krktransit.publicapi.adapter.inbound.http.HealthController;
 import pl.krktransit.publicapi.adapter.inbound.http.ratelimit.RateLimitInterceptor;
-import pl.krktransit.publicapi.adapter.inbound.http.statistics.StatisticsController;
 import pl.krktransit.publicapi.adapter.inbound.http.trips.ShapesController;
+import pl.krktransit.publicapi.adapter.inbound.http.statistics.StatisticsController;
 import pl.krktransit.publicapi.adapter.inbound.http.trips.TripsController;
 import pl.krktransit.publicapi.adapter.inbound.http.vehicles.VehiclesController;
-import pl.krktransit.publicapi.application.delaymap.LineDelayMap;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
 import pl.krktransit.publicapi.application.upcoming.UpcomingStops;
@@ -21,9 +20,7 @@ import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
 @Configuration(proxyBeanMethods = false)
 class HttpConfiguration {
     @Bean
-    StatisticsController statisticsController(LineStatistics statistics, LineDelayMap delayMap) {
-        return new StatisticsController(statistics, delayMap);
-    }
+    StatisticsController statisticsController(LineStatistics statistics) { return new StatisticsController(statistics); }
 
     @Bean
     VehiclesController vehiclesController(LiveVehicles vehicles) { return new VehiclesController(vehicles); }

@@ -19,13 +19,8 @@ import pl.krktransit.publicapi.application.schedule.ShapePoint;
 import pl.krktransit.publicapi.application.schedule.TripStop;
 import pl.krktransit.publicapi.application.schedule.TripSummary;
 import pl.krktransit.publicapi.support.FakeUpstreams;
-import pl.krktransit.schedule.contracts.v1.GetLineRoutesResponse;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
 import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
-import pl.krktransit.schedule.contracts.v1.LineDirection;
-import pl.krktransit.schedule.contracts.v1.RoutePoint;
-import pl.krktransit.schedule.contracts.v1.RouteSegment;
-import pl.krktransit.schedule.contracts.v1.RouteStop;
 
 class GrpcScheduleSourceTest {
     private final FakeUpstreams upstreams = startUpstreams();
@@ -37,29 +32,6 @@ class GrpcScheduleSourceTest {
     void close() {
         channel.shutdownNow();
         upstreams.close();
-    }
-
-    @Test
-    void mapsLineRoutesAndDistinguishesEmptyRoutesFromFailures() {
-        upstreams.schedule.lineRoutes.put("198", GetLineRoutesResponse.newBuilder()
-                .addDirections(LineDirection.newBuilder().setHeadsign("End").setTripsCount(42)
-                        .addStops(RouteStop.newBuilder().setStopKey("a|")
-                                .setStopName("A").setLatitude(0).setLongitude(19))
-                        .addSegments(RouteSegment.newBuilder().setFromStopKey("a|").setToStopKey("b|")
-                                .addPoints(RoutePoint.newBuilder().setLatitude(50).setLongitude(19))
-                                .addPoints(RoutePoint.newBuilder().setLatitude(51).setLongitude(20)))).build());
-        assertThat(source.lineRoutes("198").directions()).singleElement().satisfies(direction -> {
-            assertThat(direction.tripsCount()).isEqualTo(42);
-            assertThat(direction.stops().getFirst().stopDesc()).isEmpty();
-            assertThat(direction.segments().getFirst().points()).containsExactly(
-                    new pl.krktransit.publicapi.application.schedule.RoutePoint(50, 19),
-                    new pl.krktransit.publicapi.application.schedule.RoutePoint(51, 20));
-        });
-        assertThat(upstreams.schedule.lastLineNumber).isEqualTo("198");
-        assertThat(source.lineRoutes("999").directions()).isEmpty();
-        upstreams.schedule.failure = Status.DEADLINE_EXCEEDED;
-        assertThatThrownBy(() -> source.lineRoutes("198")).isInstanceOf(ApiFailure.UpstreamUnavailable.class);
-        assertThat(upstreams.authorizations).allMatch("Bearer schedule-token"::equals);
     }
 
     @Test

@@ -2,22 +2,18 @@ package pl.krktransit.stopevents.adapter.outbound.postgres;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 
-import com.zaxxer.hikari.HikariDataSource;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
+import java.time.Duration;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
+import com.zaxxer.hikari.HikariDataSource;
+import static org.awaitility.Awaitility.await;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import pl.krktransit.stopevents.application.statistics.*;
@@ -54,84 +50,6 @@ class JdbcStatisticsReaderIT {
         try (var connection = DATABASE.dataSource().getConnection(); var statement = connection.prepareStatement(CLEAR)) {
             statement.executeUpdate();
         }
-    }
-
-    @Test
-    void delayMapAggregatesSignedGainsWithInterpolatedPercentilesAndNormalizedKeys() {
-        mapPair("one", DATE, "08:00", 10, "UR Al. 29 Listopada", "01");
-        mapPair("two", DATE, "08:30", 30, "ur al. 29 listopada", "01");
-        mapPair("three", DATE, "09:00", -10, "UR AL. 29 LISTOPADA", "01");
-        var result = (DelayMap) read(Statistic.DELAY_MAP, false);
-        assertThat(result.segments()).singleElement().satisfies(segment -> {
-            assertThat(segment.fromStopKey()).isEqualTo("ur al. 29 listopada|01");
-            assertThat(segment.toStopKey()).isEqualTo("zażółć|");
-            assertThat(segment.delays()).containsExactly(
-                    new BandDelay(DelayBand.ALL_DAY, 3, 10, 10, 26),
-                    new BandDelay(DelayBand.MIDDAY, 1, -10, -10, -10),
-                    new BandDelay(DelayBand.MORNING, 2, 20, 20, 28));
-        });
-    }
-
-    @Test
-    void delayMapUsesStartStopWarsawHourAndServiceDateForAllBandBoundaries() {
-        String[] times = {"06:59", "07:00", "08:59", "09:00", "14:59", "15:00", "17:59", "18:00", "23:59"};
-        for (int index = 0; index < times.length; index++) mapPair("time" + index, DATE, times[index], 10, "A", null);
-        mapPair("saturday", DATE.plusDays(2), "08:00", 10, "A", null);
-        mapPair("sunday", DATE.plusDays(3), "16:00", 10, "A", null);
-        var friday = DATE.plusDays(1);
-        var nextMorning = friday.plusDays(1).atTime(8, 0).atZone(java.time.ZoneId.of("Europe/Warsaw")).toInstant();
-        mapPairAt("service-friday", friday, nextMorning, 10, "A", null);
-        var result = (DelayMap) reader.read(Statistic.DELAY_MAP,
-                new StatisticsQuery("139", DATE, DATE.plusDays(3), false), new QueryCancellation());
-        var bands = result.segments().getFirst().delays().stream().collect(java.util.stream.Collectors.toMap(BandDelay::band, BandDelay::samples));
-        assertThat(bands).containsExactlyInAnyOrderEntriesOf(java.util.Map.of(DelayBand.ALL_DAY, 12L,
-                DelayBand.MORNING, 3L, DelayBand.MIDDAY, 2L, DelayBand.AFTERNOON, 2L,
-                DelayBand.EVENING_NIGHT, 3L, DelayBand.WEEKEND, 2L));
-    }
-
-    @Test
-    void delayMapKeepsWarsawMorningAcrossTheDaylightSavingChange() {
-        var before = LocalDate.of(2026, 3, 27);
-        var after = LocalDate.of(2026, 3, 30);
-        mapPair("winter", before, "07:00", 10, "A", null);
-        mapPair("summer", after, "07:00", 30, "A", null);
-        var result = (DelayMap) reader.read(Statistic.DELAY_MAP,
-                new StatisticsQuery("139", before, after, false), new QueryCancellation());
-        assertThat(result.segments().getFirst().delays()).containsExactly(
-                new BandDelay(DelayBand.ALL_DAY, 2, 20, 20, 28),
-                new BandDelay(DelayBand.MORNING, 2, 20, 20, 28));
-    }
-
-    @Test
-    void delayMapRefusesGapsVehicleChangesAndExcludedEstimatedEndpoints() {
-        insert("gap", 2, 0); insert("gap", 4, 500);
-        insert("swap", DATE, 2, 5, 0, "A", DetectionMethod.STOPPED_AT);
-        insert("swap", DATE, 3, 5, 500, "B", DetectionMethod.STOPPED_AT);
-        insert("estimated", DATE, 2, 4, 0, "P", DetectionMethod.STOPPED_AT);
-        insert("estimated", DATE, 3, 4, 100, "P", DetectionMethod.SEQ_JUMP);
-        insert("ends", DATE, 1, 4, 0, "P", DetectionMethod.STOPPED_AT);
-        insert("ends", DATE, 4, 4, 500, "P", DetectionMethod.STOPPED_AT);
-        assertThat(read(Statistic.DELAY_MAP, false)).isEqualTo(new DelayMap(List.of()));
-        assertThat(((DelayMap) read(Statistic.DELAY_MAP, true)).segments()).singleElement()
-                .satisfies(segment -> assertThat(segment.delays()).allSatisfy(band -> assertThat(band.samples()).isEqualTo(1)));
-        insert("old", DATE.minusDays(1), 2, 4, 0, "P", DetectionMethod.SEQ_JUMP);
-        insert("old", DATE.minusDays(1), 3, 4, 100, "P", DetectionMethod.SEQ_JUMP);
-        assertThat(reader.read(Statistic.DELAY_MAP, new StatisticsQuery("139", DATE.minusDays(1), DATE.minusDays(1), true),
-                new QueryCancellation())).isEqualTo(new DelayMap(List.of()));
-    }
-
-    private void mapPair(String trip, LocalDate date, String time, int gain, String name, String description) {
-        var planned = date.atTime(java.time.LocalTime.parse(time)).atZone(java.time.ZoneId.of("Europe/Warsaw")).toInstant();
-        mapPairAt(trip, date, planned, gain, name, description);
-    }
-
-    private void mapPairAt(String trip, LocalDate date, java.time.Instant planned, int gain, String name, String description) {
-        writer.insert(List.of(
-                new StopEvent(SOURCE, SOURCE.scope(trip), date, 2, SOURCE.scope("A"), "139", name, description, 0, "End",
-                        planned, planned.plusSeconds(60), 60, null, "PLATE", DetectionMethod.STOPPED_AT, false, "hash", 4),
-                new StopEvent(SOURCE, SOURCE.scope(trip), date, 3, SOURCE.scope("B"), "139", "ZAŻÓŁĆ", null, 0, "End",
-                        planned.plusSeconds(600), planned.plusSeconds(660 + gain), 60 + gain,
-                        null, "PLATE", DetectionMethod.STOPPED_AT, false, "hash", 4)));
     }
 
     @Test
@@ -249,16 +167,14 @@ class JdbcStatisticsReaderIT {
                 Set.of(SOURCE, new SourceId("warsaw", "mpk-bus")))).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = Statistic.class, names = {"TREND", "DELAY_MAP"})
-    void cancellationStopsAnActualBlockedPostgresQueryAndReleasesItsConnection(Statistic statistic)
-            throws SQLException, InterruptedException, ExecutionException, TimeoutException {
+    @Test
+    void cancellationStopsAnActualBlockedPostgresQueryAndReleasesItsConnection() throws Exception {
         insert("A", 2, 60);
         var cancellation = new QueryCancellation();
         try (var lock = DATABASE.dataSource().getConnection(); var callers = Executors.newVirtualThreadPerTaskExecutor()) {
             lock.setAutoCommit(false);
             try (var statement = lock.prepareStatement(LOCK)) { statement.execute(); }
-            var result = callers.submit(() -> reader.read(statistic,
+            var result = callers.submit(() -> reader.read(Statistic.TREND,
                     new StatisticsQuery("139", DATE, DATE, false), cancellation));
             try {
                 await().atMost(Duration.ofSeconds(5)).until(this::queryIsBlocked);

@@ -7,16 +7,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 public sealed interface StatisticsResult {
-    record DelayMap(List<MapSegment> segments) implements StatisticsResult {
-        public DelayMap { segments = List.copyOf(segments); }
-    }
-
-    record MapSegment(String fromStopKey, String toStopKey, List<BandDelay> delays) {
-        public MapSegment { delays = List.copyOf(delays); }
-    }
-
-    record BandDelay(DelayBand band, long samples, double meanSeconds, double medianSeconds, double p90Seconds) {}
-
     record MaxDelay(long tripsAnalyzed, List<Segment> segments) implements StatisticsResult {
         public MaxDelay { segments = List.copyOf(segments); }
     }
