@@ -53,6 +53,7 @@ public-api:
     address: ${PUBLIC_API_PREDICTION_ADDRESS:static://127.0.0.1:9093}
     token: ${PUBLIC_API_PREDICTION_TOKEN:}
     deadline: 300ms
+    lines: ${PUBLIC_API_PREDICTION_LINES:139,163,179,304,578}
   rate-limits:
     maximum-tracked-clients: 100000
     routes:

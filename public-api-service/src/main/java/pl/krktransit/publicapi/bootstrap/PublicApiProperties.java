@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.toUnmodifiableMap;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcCallSettings;
 
@@ -79,8 +80,11 @@ public record PublicApiProperties(List<String> allowedOrigins, Statistics statis
         public String toString() { return "LiveVehicles[address=" + address + ", deadline=" + deadline + "]"; }
     }
 
-    public record Prediction(String address, String token, Duration deadline) {
-        public Prediction { requirePositive(deadline); }
+    public record Prediction(String address, String token, Duration deadline, Set<String> lines) {
+        public Prediction {
+            requirePositive(deadline);
+            lines = Set.copyOf(lines);
+        }
 
         public boolean enabled() { return address != null && !address.isBlank(); }
 

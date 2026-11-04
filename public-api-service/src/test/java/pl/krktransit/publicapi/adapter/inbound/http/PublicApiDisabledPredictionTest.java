@@ -54,7 +54,7 @@ class PublicApiDisabledPredictionTest {
                 .andExpect(content().json("""
                         {"trip_id": "krakow:mpk-bus:t", "status": "IN_PROGRESS", "observed_at": "2026-10-30T10:20:00+00:00",
                          "stops": [{"stop_id": "krakow:mpk-bus:s", "stop_name": "Rondo", "stop_desc": null, "sequence": 1,
-                           "scheduled_arrival": "2026-10-30T11:00:00+01:00", "predicted_arrival": null}]}""",
+                           "scheduled_arrival": "2026-10-30T11:00:00+01:00", "predicted_arrival": null, "prediction_source": null}]}""",
                         JsonCompareMode.STRICT));
 
         assertThat(context.getBean(PredictionSource.class)).isSameAs(PredictionSource.DISABLED);
