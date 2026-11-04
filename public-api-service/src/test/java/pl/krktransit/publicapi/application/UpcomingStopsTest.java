@@ -26,6 +26,9 @@ import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.TripStop;
 import pl.krktransit.publicapi.application.schedule.TripStops;
 import pl.krktransit.publicapi.application.schedule.TripSummaries;
+import pl.krktransit.publicapi.application.upcoming.ArrivalSource;
+import pl.krktransit.publicapi.application.upcoming.OperatorForecast;
+import pl.krktransit.publicapi.application.upcoming.OperatorForecast.ForecastedStop;
 import pl.krktransit.publicapi.application.upcoming.PredictedDelays;
 import pl.krktransit.publicapi.application.upcoming.PredictionRequest;
 import pl.krktransit.publicapi.application.upcoming.TripProgress;
@@ -43,16 +46,22 @@ class UpcomingStopsTest {
     private static final FeedId BUS = new FeedId("krakow", "mpk-bus");
     private static final String TRIP = "krakow:mpk-bus:trip";
     private static final Instant OBSERVED = Instant.parse("2026-11-02T13:00:00Z");
+    private static final Instant FORECASTED = Instant.parse("2026-11-02T13:10:00Z");
     private final MutableClock clock = new MutableClock(OBSERVED);
     private final Positions positions = new Positions();
     private final Schedule schedule = new Schedule();
     private final List<PredictionRequest> predictionRequests = new ArrayList<>();
+    private final List<String> forecastRequests = new ArrayList<>();
     private PredictedDelays delays = PredictedDelays.NONE;
+    private OperatorForecast forecast = OperatorForecast.NONE;
     private final UpcomingStops upcoming = new UpcomingStops(new PositionSnapshot(positions, Duration.ofSeconds(3), clock),
             new ScheduleLookups(schedule), request -> {
                 predictionRequests.add(request);
                 return delays;
-            });
+            }, tripId -> {
+                forecastRequests.add(tripId);
+                return forecast;
+            }, Set.of("139"));
 
     @Test
     void travellingTowardsAStopListsItAndTheFourAfterIt() {
@@ -265,6 +274,107 @@ class UpcomingStopsTest {
         assertThat(predictionRequests).isEmpty();
     }
 
+    @Test
+    void lineWithAModelShowsOnlyItsPredictionsAndNeverAsksForTheOperatorForecast() {
+        tripWithSequences(1, 2, 3, 4, 5, 6);
+        delays = new PredictedDelays(Map.of(3, 120));
+        forecast = new OperatorForecast(List.of(new ForecastedStop(4, null, FORECASTED)));
+        drive(3, IN_TRANSIT_TO);
+
+        var stops = upcoming.forTrip(TRIP).stops();
+
+        assertThat(stops).extracting(UpcomingStop::predictionSource).containsExactly(ArrivalSource.ML, null, null, null);
+        assertThat(stops.get(1).predictedArrival()).isNull();
+        assertThat(forecastRequests).isEmpty();
+    }
+
+    @Test
+    void lineWithAModelStaysEmptyWhenTheModelGivesNothing() {
+        tripWithSequences(1, 2, 3, 4);
+        forecast = new OperatorForecast(List.of(new ForecastedStop(3, null, FORECASTED)));
+        drive(3, IN_TRANSIT_TO);
+
+        assertThat(upcoming.forTrip(TRIP).stops()).extracting(UpcomingStop::predictedArrival).containsOnlyNulls();
+        assertThat(forecastRequests).isEmpty();
+    }
+
+    @Test
+    void lineWithoutAModelShowsTheOperatorForecastOnEveryRowAndSkipsPrediction() {
+        lineWithoutModel(stop("a", 1, 46_800), stop("b", 2, 46_860), stop("c", 3, 46_920));
+        forecast = new OperatorForecast(List.of(new ForecastedStop(1, "krakow:mpk-bus:a", FORECASTED),
+                new ForecastedStop(2, null, FORECASTED.plusSeconds(60)), new ForecastedStop(3, null, FORECASTED.plusSeconds(120))));
+        drive(1, IN_TRANSIT_TO);
+
+        var stops = upcoming.forTrip(TRIP).stops();
+
+        assertThat(stops).extracting(UpcomingStop::predictedArrival)
+                .containsExactly(FORECASTED, FORECASTED.plusSeconds(60), FORECASTED.plusSeconds(120));
+        assertThat(stops).extracting(UpcomingStop::predictionSource).containsOnly(ArrivalSource.OPERATOR);
+        assertThat(forecastRequests).containsExactly(TRIP);
+        assertThat(predictionRequests).isEmpty();
+    }
+
+    @Test
+    void forecastMissingOnARowLeavesThatRowEmpty() {
+        lineWithoutModel(stop("a", 1, 46_800), stop("b", 2, 46_860));
+        forecast = new OperatorForecast(List.of(new ForecastedStop(null, "krakow:mpk-bus:b", FORECASTED)));
+        drive(1, IN_TRANSIT_TO);
+
+        var stops = upcoming.forTrip(TRIP).stops();
+
+        assertThat(stops.getFirst().predictedArrival()).isNull();
+        assertThat(stops.getFirst().predictionSource()).isNull();
+        assertThat(stops.get(1).predictedArrival()).isEqualTo(FORECASTED);
+        assertThat(stops.get(1).predictionSource()).isEqualTo(ArrivalSource.OPERATOR);
+    }
+
+    @Test
+    void repeatedStopIsMatchedOnlyBySequence() {
+        lineWithoutModel(stop("loop", 1, 46_800), stop("b", 2, 46_860), stop("loop", 3, 46_920));
+        forecast = new OperatorForecast(List.of(new ForecastedStop(null, "krakow:mpk-bus:loop", FORECASTED),
+                new ForecastedStop(3, "krakow:mpk-bus:loop", FORECASTED.plusSeconds(120))));
+        drive(1, IN_TRANSIT_TO);
+
+        assertThat(upcoming.forTrip(TRIP).stops()).extracting(UpcomingStop::predictedArrival)
+                .containsExactly(null, null, FORECASTED.plusSeconds(120));
+    }
+
+    @Test
+    void stopForecastedTwiceWithoutASequenceIsNotGuessed() {
+        lineWithoutModel(stop("a", 1, 46_800));
+        forecast = new OperatorForecast(List.of(new ForecastedStop(null, "krakow:mpk-bus:a", FORECASTED),
+                new ForecastedStop(null, "krakow:mpk-bus:a", FORECASTED.plusSeconds(60))));
+        drive(1, IN_TRANSIT_TO);
+
+        assertThat(upcoming.forTrip(TRIP).stops().getFirst().predictedArrival()).isNull();
+    }
+
+    @Test
+    void sequencePointingAtAnotherStopIsNotTrusted() {
+        lineWithoutModel(stop("a", 1, 46_800), stop("b", 2, 46_860));
+        forecast = new OperatorForecast(List.of(new ForecastedStop(1, "krakow:mpk-bus:b", FORECASTED)));
+        drive(1, IN_TRANSIT_TO);
+
+        var stops = upcoming.forTrip(TRIP).stops();
+
+        assertThat(stops.getFirst().predictedArrival()).isNull();
+        assertThat(stops.get(1).predictedArrival()).isEqualTo(FORECASTED);
+    }
+
+    @Test
+    void noForecastLeavesTheScheduleInPlace() {
+        lineWithoutModel(stop("a", 1, 46_800));
+        drive(1, IN_TRANSIT_TO);
+
+        var stop = upcoming.forTrip(TRIP).stops().getFirst();
+
+        assertThat(stop.scheduledArrival()).isEqualTo(Instant.parse("2026-11-02T12:00:00Z"));
+        assertThat(stop.predictedArrival()).isNull();
+        assertThat(stop.predictionSource()).isNull();
+    }
+
+    private void lineWithoutModel(TripStop... stops) { schedule.trip("999", List.of(stops)); }
+
     private void tripWithSequences(int... sequences) {
         schedule.trip(IntStream.of(sequences).mapToObj(sequence -> stop("s" + sequence, sequence, 13 * 3600 + sequence * 60))
                 .toList());
@@ -311,7 +421,9 @@ class UpcomingStopsTest {
         private final Map<String, TripStops> trips = new HashMap<>();
         private boolean unavailable;
 
-        void trip(List<TripStop> stops) { trips.put(TRIP, new TripStops(TRIP, "139", new ArrayList<>(stops))); }
+        void trip(List<TripStop> stops) { trip("139", stops); }
+
+        void trip(String line, List<TripStop> stops) { trips.put(TRIP, new TripStops(TRIP, line, new ArrayList<>(stops))); }
 
         @Override
         public Optional<String> currentHash(FeedId feed) {

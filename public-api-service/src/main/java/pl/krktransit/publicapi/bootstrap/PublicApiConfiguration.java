@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import pl.krktransit.publicapi.adapter.outbound.grpc.CachedScheduleSource;
+import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcOperatorForecastSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcPredictionSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcScheduleSource;
 import pl.krktransit.publicapi.adapter.outbound.grpc.GrpcStatisticsSource;
@@ -15,6 +16,7 @@ import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.statistics.LineStatistics;
 import pl.krktransit.publicapi.application.statistics.StatisticsSource;
+import pl.krktransit.publicapi.application.upcoming.OperatorForecastSource;
 import pl.krktransit.publicapi.application.upcoming.PredictionSource;
 import pl.krktransit.publicapi.application.upcoming.UpcomingStops;
 import pl.krktransit.publicapi.application.vehicles.LiveVehicles;
@@ -67,6 +69,11 @@ class PublicApiConfiguration {
     }
 
     @Bean
+    OperatorForecastSource operatorForecastSource(ManagedChannel liveVehiclesChannel, PublicApiProperties properties) {
+        return new GrpcOperatorForecastSource(liveVehiclesChannel, properties.liveVehicles().calls());
+    }
+
+    @Bean
     LineStatistics lineStatistics(StatisticsSource statistics) { return new LineStatistics(statistics); }
 
     @Bean
@@ -88,7 +95,8 @@ class PublicApiConfiguration {
     }
 
     @Bean
-    UpcomingStops upcomingStops(PositionSnapshot positions, ScheduleLookups schedule, PredictionSource predictions) {
-        return new UpcomingStops(positions, schedule, predictions);
+    UpcomingStops upcomingStops(PositionSnapshot positions, ScheduleLookups schedule, PredictionSource predictions,
+                                OperatorForecastSource forecasts, PublicApiProperties properties) {
+        return new UpcomingStops(positions, schedule, predictions, forecasts, properties.prediction().lines());
     }
 }

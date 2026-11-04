@@ -26,8 +26,10 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import pl.krktransit.livevehicles.contracts.v1.GetTripForecastResponse;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
+import pl.krktransit.livevehicles.contracts.v1.StopForecast;
 import pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus;
 import pl.krktransit.prediction.contracts.v1.PredictArrivalsResponse;
 import pl.krktransit.prediction.contracts.v1.PredictedArrival;
@@ -335,9 +337,9 @@ class PublicApiHttpTest {
                 {"trip_id": "krakow:mpk-bus:up-1", "status": "IN_PROGRESS", "observed_at": "2026-10-30T10:00:00+00:00",
                  "stops": [
                    {"stop_id": "krakow:mpk-bus:s2", "stop_name": "Plac", "stop_desc": "02", "sequence": 2,
-                    "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": null},
+                    "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": null, "prediction_source": null},
                    {"stop_id": "krakow:mpk-bus:s3", "stop_name": "Dworzec", "stop_desc": null, "sequence": 3,
-                    "scheduled_arrival": "2026-10-31T00:35:00+01:00", "predicted_arrival": null}]}""",
+                    "scheduled_arrival": "2026-10-31T00:35:00+01:00", "predicted_arrival": null, "prediction_source": null}]}""",
                 JsonCompareMode.STRICT));
         call(get("/v1/trips/krakow:mpk-bus:other/upcoming-stops")).andExpect(status().isNotFound()).andExpect(content().json("""
                 {"error_code": "RESOURCE_NOT_FOUND", "message": "Vehicle on trip 'krakow:mpk-bus:other' not found"}""",
@@ -370,20 +372,58 @@ class PublicApiHttpTest {
                 {"trip_id": "krakow:mpk-bus:ml", "status": "IN_PROGRESS", "observed_at": "2026-10-30T10:00:00+00:00",
                  "stops": [
                    {"stop_id": "krakow:mpk-bus:s2", "stop_name": "Plac", "stop_desc": "02", "sequence": 2,
-                    "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": "2026-10-30T11:05:05+01:00"},
+                    "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": "2026-10-30T11:05:05+01:00",
+                    "prediction_source": "ML"},
                    {"stop_id": "krakow:mpk-bus:s3", "stop_name": "Dworzec", "stop_desc": null, "sequence": 3,
-                    "scheduled_arrival": "2026-10-31T00:35:00+01:00", "predicted_arrival": null}]}""",
+                    "scheduled_arrival": "2026-10-31T00:35:00+01:00", "predicted_arrival": null, "prediction_source": null}]}""",
                 JsonCompareMode.STRICT));
         var request = UPSTREAMS.prediction.requests.getFirst();
         assertThat(request.getLineNumber()).isEqualTo("139");
         assertThat(request.getServiceDate()).isEqualTo("2026-10-30");
         assertThat(request.getTargetSequencesList()).containsExactly(2, 3);
         assertThat(UPSTREAMS.authorizations).contains("Bearer prediction-token");
+        assertThat(UPSTREAMS.liveVehicles.forecastRequests).isEmpty();
 
         UPSTREAMS.prediction.failure = Status.UNAVAILABLE;
         call(get("/v1/trips/krakow:mpk-bus:ml/upcoming-stops")).andExpect(status().isOk()).andExpect(content().json("""
                 {"stops": [{"sequence": 2, "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": null},
                            {"sequence": 3, "scheduled_arrival": "2026-10-31T00:35:00+01:00", "predicted_arrival": null}]}""",
+                JsonCompareMode.LENIENT));
+        assertThat(UPSTREAMS.liveVehicles.forecastRequests).isEmpty();
+    }
+
+    @Test
+    void upcomingStopsOfALineWithoutAModelUseTheOperatorForecastAndSurviveItsFailure() throws Exception {
+        UPSTREAMS.schedule.hashes.put(feedKey("krakow", "mpk-bus"), "hash");
+        UPSTREAMS.schedule.trips.put(tripKey("hash", "krakow:mpk-bus:ztp"), GetTripContextResponse.newBuilder()
+                .setTripId("krakow:mpk-bus:ztp").setLineNumber("999")
+                .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s1").setStopName("Rondo").setStopSequence(1)
+                        .setArrivalSeconds(39_600).setDepartureSeconds(39_600))
+                .addStops(TripStop.newBuilder().setStopId("krakow:mpk-bus:s2").setStopName("Plac").setStopSequence(2)
+                        .setArrivalSeconds(39_780).setDepartureSeconds(39_800)).build());
+        UPSTREAMS.liveVehicles.positions = ListVehiclePositionsResponse.newBuilder()
+                .addVehicles(vehicle("krakow:mpk-bus:ztp", "DN041").setStopId("krakow:mpk-bus:s1").setCurrentStopSequence(1)
+                        .setCurrentStatus(VehicleStopStatus.VEHICLE_STOP_STATUS_IN_TRANSIT_TO)).build();
+        UPSTREAMS.liveVehicles.forecast = GetTripForecastResponse.newBuilder()
+                .addStops(StopForecast.newBuilder().setStopId("krakow:mpk-bus:s1").setArrivalTime(Timestamp.newBuilder()
+                        .setSeconds(Instant.parse("2026-10-30T10:02:30Z").getEpochSecond()))).build();
+
+        call(get("/v1/trips/krakow:mpk-bus:ztp/upcoming-stops")).andExpect(status().isOk()).andExpect(content().json("""
+                {"trip_id": "krakow:mpk-bus:ztp", "status": "IN_PROGRESS", "observed_at": "2026-10-30T10:00:00+00:00",
+                 "stops": [
+                   {"stop_id": "krakow:mpk-bus:s1", "stop_name": "Rondo", "stop_desc": null, "sequence": 1,
+                    "scheduled_arrival": "2026-10-30T11:00:00+01:00", "predicted_arrival": "2026-10-30T11:02:30+01:00",
+                    "prediction_source": "OPERATOR"},
+                   {"stop_id": "krakow:mpk-bus:s2", "stop_name": "Plac", "stop_desc": null, "sequence": 2,
+                    "scheduled_arrival": "2026-10-30T11:03:00+01:00", "predicted_arrival": null, "prediction_source": null}]}""",
+                JsonCompareMode.STRICT));
+        assertThat(UPSTREAMS.liveVehicles.forecastRequests).containsExactly("krakow:mpk-bus:ztp");
+        assertThat(UPSTREAMS.prediction.requests).isEmpty();
+
+        UPSTREAMS.liveVehicles.forecastFailure = Status.UNAVAILABLE;
+        call(get("/v1/trips/krakow:mpk-bus:ztp/upcoming-stops")).andExpect(status().isOk()).andExpect(content().json("""
+                {"stops": [{"sequence": 1, "predicted_arrival": null, "prediction_source": null},
+                           {"sequence": 2, "predicted_arrival": null, "prediction_source": null}]}""",
                 JsonCompareMode.LENIENT));
     }
 

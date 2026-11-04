@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.stream.IntStream;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.ScheduleLookups;
@@ -19,12 +20,17 @@ public final class UpcomingStops {
     private final PositionSnapshot positions;
     private final ScheduleLookups schedule;
     private final PredictionSource predictions;
+    private final OperatorForecastSource forecasts;
+    private final Set<String> modelLines;
     private final ServiceCalendar calendar = new ServiceCalendar();
 
-    public UpcomingStops(PositionSnapshot positions, ScheduleLookups schedule, PredictionSource predictions) {
+    public UpcomingStops(PositionSnapshot positions, ScheduleLookups schedule, PredictionSource predictions,
+                         OperatorForecastSource forecasts, Set<String> modelLines) {
         this.positions = positions;
         this.schedule = schedule;
         this.predictions = predictions;
+        this.forecasts = forecasts;
+        this.modelLines = Set.copyOf(modelLines);
     }
 
     public UpcomingTrip forTrip(String tripId) {
@@ -40,9 +46,22 @@ public final class UpcomingStops {
         if (first >= stops.size()) return UpcomingTrip.withoutStops(vehicle.tripId(), TripProgress.FINISHED, vehicle.timestamp());
         var date = calendar.serviceDate(vehicle.timestamp(), stops.get(reference.getAsInt()).arrivalSeconds());
         var rows = stops.subList(first, Math.min(first + MAXIMUM_STOPS, stops.size()));
+        return new UpcomingTrip(vehicle.tripId(), TripProgress.IN_PROGRESS, vehicle.timestamp(), predictedRows(vehicle, trip, date, rows));
+    }
+
+    private List<UpcomingStop> predictedRows(VehiclePosition vehicle, TripStops trip, LocalDate date, List<TripStop> rows) {
+        if (modelLines.contains(trip.lineNumber())) return withModel(vehicle, trip, date, rows);
+        return withOperatorForecast(vehicle, trip, date, rows);
+    }
+
+    private List<UpcomingStop> withModel(VehiclePosition vehicle, TripStops trip, LocalDate date, List<TripStop> rows) {
         var delays = predictions.predict(predictionRequest(vehicle, trip, date, rows));
-        var upcoming = rows.stream().map(stop -> upcomingStop(stop, date, delays)).toList();
-        return new UpcomingTrip(vehicle.tripId(), TripProgress.IN_PROGRESS, vehicle.timestamp(), upcoming);
+        return rows.stream().map(stop -> modelStop(stop, date, delays)).toList();
+    }
+
+    private List<UpcomingStop> withOperatorForecast(VehiclePosition vehicle, TripStops trip, LocalDate date, List<TripStop> rows) {
+        var forecast = forecasts.forecast(vehicle.tripId());
+        return rows.stream().map(stop -> operatorStop(stop, trip, date, forecast)).toList();
     }
 
     private static PredictionRequest predictionRequest(VehiclePosition vehicle, TripStops trip, LocalDate date, List<TripStop> rows) {
@@ -50,10 +69,17 @@ public final class UpcomingStops {
                 rows.stream().map(TripStop::sequence).toList());
     }
 
-    private UpcomingStop upcomingStop(TripStop stop, LocalDate date, PredictedDelays delays) {
+    private UpcomingStop modelStop(TripStop stop, LocalDate date, PredictedDelays delays) {
         var scheduled = calendar.plannedTime(date, stop.arrivalSeconds());
         var delay = delays.forSequence(stop.sequence());
-        return new UpcomingStop(stop, scheduled, delay.isPresent() ? scheduled.plusSeconds(delay.getAsInt()) : null);
+        if (delay.isEmpty()) return UpcomingStop.withoutPrediction(stop, scheduled);
+        return new UpcomingStop(stop, scheduled, scheduled.plusSeconds(delay.getAsInt()), ArrivalSource.ML);
+    }
+
+    private UpcomingStop operatorStop(TripStop stop, TripStops trip, LocalDate date, OperatorForecast forecast) {
+        var scheduled = calendar.plannedTime(date, stop.arrivalSeconds());
+        return forecast.arrivalAt(stop, trip.stops()).map(arrival -> new UpcomingStop(stop, scheduled, arrival, ArrivalSource.OPERATOR))
+                .orElseGet(() -> UpcomingStop.withoutPrediction(stop, scheduled));
     }
 
     private OptionalInt referenceIndex(VehiclePosition vehicle, List<TripStop> stops) {
