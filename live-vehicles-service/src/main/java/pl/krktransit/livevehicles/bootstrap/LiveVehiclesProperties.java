@@ -10,18 +10,20 @@ import pl.krktransit.livevehicles.domain.SourceId;
 @ConfigurationProperties("live-vehicles")
 public record LiveVehiclesProperties(boolean jobsEnabled, List<Source> sources, String streamPrefix,
                                      int readCount, Duration readBlock, Duration retention, int maximumVehicles,
-                                     Duration retryDelay, Duration shutdownTimeout, String grpcToken,
+                                     Duration forecastRetention, int maximumForecasts, Duration retryDelay, Duration shutdownTimeout, String grpcToken,
                                      Redis redis) {
     public LiveVehiclesProperties {
         sources = List.copyOf(sources);
         requireSources(sources);
-        positive(readBlock, retention, retryDelay, shutdownTimeout);
-        requireStreamSettings(readCount, maximumVehicles, streamPrefix);
+        positive(readBlock, retention, forecastRetention, retryDelay, shutdownTimeout);
+        requireStreamSettings(readCount, maximumVehicles, maximumForecasts, streamPrefix);
         requireBlockingTimeout(redis.commandTimeout(), readBlock);
         grpcToken = grpcToken == null ? "" : grpcToken;
     }
 
     public Set<SourceId> sourceIds() { return sources.stream().map(Source::id).collect(Collectors.toUnmodifiableSet()); }
+
+    public Duration replayWindow() { return retention.compareTo(forecastRetention) >= 0 ? retention : forecastRetention; }
 
     @Override
     public String toString() { return "LiveVehiclesProperties[sources=" + sources + "]"; }
@@ -34,14 +36,14 @@ public record LiveVehiclesProperties(boolean jobsEnabled, List<Source> sources, 
         return !sources.isEmpty() && sources.stream().map(Source::id).distinct().count() == sources.size();
     }
 
-    private static void requireStreamSettings(int readCount, int maximumVehicles, String streamPrefix) {
-        if (!validStreamSettings(readCount, maximumVehicles, streamPrefix)) {
-            throw new IllegalArgumentException("Positive read count, vehicle capacity and a stream prefix are required");
+    private static void requireStreamSettings(int readCount, int maximumVehicles, int maximumForecasts, String streamPrefix) {
+        if (!validStreamSettings(readCount, maximumVehicles, maximumForecasts, streamPrefix)) {
+            throw new IllegalArgumentException("Positive read count, capacities and a stream prefix are required");
         }
     }
 
-    private static boolean validStreamSettings(int readCount, int maximumVehicles, String streamPrefix) {
-        return readCount > 0 && maximumVehicles > 0 && hasText(streamPrefix);
+    private static boolean validStreamSettings(int readCount, int maximumVehicles, int maximumForecasts, String streamPrefix) {
+        return readCount > 0 && maximumVehicles > 0 && maximumForecasts > 0 && hasText(streamPrefix);
     }
 
     private static void requireBlockingTimeout(Duration commandTimeout, Duration readBlock) {

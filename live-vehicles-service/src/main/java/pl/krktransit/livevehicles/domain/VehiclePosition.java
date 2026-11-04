@@ -6,7 +6,8 @@ import java.util.Objects;
 
 public record VehiclePosition(SourceId source, String tripId, String vehicleId, String licensePlate,
                               double latitude, double longitude, Double bearing,
-                              Instant timestamp, Instant fetchedAt, StreamId streamId, StopProgress progress) {
+                              Instant timestamp, Instant fetchedAt, StreamId streamId, StopProgress progress)
+        implements LiveObservation {
     private static final Duration TOLERATED_CLOCK_SKEW = Duration.ofMinutes(1);
 
     public VehiclePosition {

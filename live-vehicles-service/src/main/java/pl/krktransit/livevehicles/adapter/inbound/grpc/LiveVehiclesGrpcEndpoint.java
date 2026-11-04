@@ -4,12 +4,16 @@ import com.google.protobuf.Timestamp;
 import io.grpc.stub.StreamObserver;
 import java.time.Instant;
 import pl.krktransit.livevehicles.application.LiveVehicleQueries;
+import pl.krktransit.livevehicles.contracts.v1.GetTripForecastRequest;
+import pl.krktransit.livevehicles.contracts.v1.GetTripForecastResponse;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsRequest;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsResponse;
 import pl.krktransit.livevehicles.contracts.v1.LiveVehiclesServiceGrpc;
+import pl.krktransit.livevehicles.contracts.v1.StopForecast;
 import pl.krktransit.livevehicles.contracts.v1.VehiclePosition;
 import pl.krktransit.livevehicles.contracts.v1.VehicleStopStatus;
 import pl.krktransit.livevehicles.domain.StopProgress;
+import pl.krktransit.livevehicles.domain.TripForecast;
 
 public final class LiveVehiclesGrpcEndpoint extends LiveVehiclesServiceGrpc.LiveVehiclesServiceImplBase {
     private final LiveVehicleQueries queries;
@@ -23,6 +27,26 @@ public final class LiveVehiclesGrpcEndpoint extends LiveVehiclesServiceGrpc.Live
         snapshot.vehicles().forEach(vehicle -> response.addVehicles(position(vehicle)));
         observer.onNext(response.build());
         observer.onCompleted();
+    }
+
+    @Override
+    public void getTripForecast(GetTripForecastRequest request, StreamObserver<GetTripForecastResponse> observer) {
+        observer.onNext(queries.forecast(request.getTripId()).map(this::forecast)
+                .orElseGet(GetTripForecastResponse::getDefaultInstance));
+        observer.onCompleted();
+    }
+
+    private GetTripForecastResponse forecast(TripForecast forecast) {
+        var response = GetTripForecastResponse.newBuilder().setFetchedAt(timestamp(forecast.fetchedAt()));
+        forecast.stops().forEach(stop -> response.addStops(stop(stop)));
+        return response.build();
+    }
+
+    private StopForecast stop(pl.krktransit.livevehicles.domain.StopForecast stop) {
+        var response = StopForecast.newBuilder().setArrivalTime(timestamp(stop.arrivalTime()));
+        if (stop.stopSequence() != null) response.setStopSequence(stop.stopSequence());
+        if (stop.stopId() != null) response.setStopId(stop.stopId());
+        return response.build();
     }
 
     private VehiclePosition position(pl.krktransit.livevehicles.domain.VehiclePosition position) {

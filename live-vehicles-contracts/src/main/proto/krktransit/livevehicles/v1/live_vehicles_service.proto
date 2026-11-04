@@ -10,6 +10,7 @@ option java_outer_classname = "LiveVehiclesServiceProto";
 
 service LiveVehiclesService {
   rpc ListVehiclePositions(ListVehiclePositionsRequest) returns (ListVehiclePositionsResponse);
+  rpc GetTripForecast(GetTripForecastRequest) returns (GetTripForecastResponse);
 }
 
 message ListVehiclePositionsRequest {}
@@ -33,6 +34,21 @@ message VehiclePosition {
   optional string stop_id = 11;
   optional uint32 current_stop_sequence = 12;
   optional VehicleStopStatus current_status = 13;
+}
+
+message GetTripForecastRequest {
+  optional string trip_id = 1;
+}
+
+message GetTripForecastResponse {
+  repeated StopForecast stops = 1;
+  google.protobuf.Timestamp fetched_at = 2;
+}
+
+message StopForecast {
+  optional uint32 stop_sequence = 1;
+  optional string stop_id = 2;
+  google.protobuf.Timestamp arrival_time = 3;
 }
 
 enum VehicleStopStatus {
