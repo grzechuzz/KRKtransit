@@ -37,7 +37,7 @@ public-api:
   schedule:
     address: ${PUBLIC_API_SCHEDULE_ADDRESS:static://127.0.0.1:9090}
     token: ${PUBLIC_API_SCHEDULE_TOKEN:}
-    deadline: 2s
+    deadline: 5s
     trip-cache-size: 50000
     trip-stops-cache-size: 5000
     hash-refresh: 30s
