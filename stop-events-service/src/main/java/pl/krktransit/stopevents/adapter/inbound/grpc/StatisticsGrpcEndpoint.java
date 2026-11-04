@@ -42,6 +42,11 @@ public final class StatisticsGrpcEndpoint extends StatisticsServiceGrpc.Statisti
         respond(request, Statistic.TREND, observer, result -> mapper.trend(request, (StatisticsResult.Trend) result));
     }
 
+    @Override
+    public void getDelayMap(StatisticsRequest request, StreamObserver<DelayMapResponse> observer) {
+        respond(request, Statistic.DELAY_MAP, observer, result -> mapper.delayMap(request, (StatisticsResult.DelayMap) result));
+    }
+
     private <T> void respond(StatisticsRequest request, Statistic statistic, StreamObserver<T> observer,
                              Function<StatisticsResult, T> response) {
         var context = Context.current();

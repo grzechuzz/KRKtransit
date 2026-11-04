@@ -35,6 +35,24 @@ public final class GtfsFixtures {
 
     public static byte[] valid(String arrival) { return zip(tables(arrival)); }
 
+    public static Map<String, String> lineRoutes() {
+        var tables = new LinkedHashMap<String, String>();
+        tables.put("routes.txt", "route_id,route_short_name\nR,198\n");
+        tables.put("stops.txt", "stop_id,stop_name,stop_code,stop_desc,stop_lat,stop_lon\n"
+                + "A,UR Al. 29 Listopada,,01,50.0,19.0\nB,Zażółć,,,50.0,19.01\nC,End,,02,50.0,19.02\n");
+        tables.put("trips.txt", "trip_id,route_id,service_id,direction_id,trip_headsign,shape_id\n"
+                + "T1,R,weekday,0,End,S1\nT2,R,weekday,1,End,S2\nT3,R,weekday,0,Start,S3\n");
+        tables.put("stop_times.txt", "trip_id,stop_sequence,stop_id,arrival_time,departure_time\n"
+                + "T1,1,A,07:00:00,07:00:00\nT1,2,B,07:05:00,07:05:00\nT1,3,C,07:10:00,07:10:00\n"
+                + "T2,1,A,08:00:00,08:00:00\nT2,2,B,08:05:00,08:05:00\nT2,3,C,08:10:00,08:10:00\n"
+                + "T3,1,C,09:00:00,09:00:00\nT3,2,B,09:05:00,09:05:00\nT3,3,A,09:10:00,09:10:00\n");
+        tables.put("shapes.txt", "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\n"
+                + "S1,50.0,19.0,1\nS1,50.0,19.01,2\nS1,50.0,19.02,3\n"
+                + "S2,50.0,19.0,1\nS2,50.0,19.01,2\nS2,50.0,19.02,3\n"
+                + "S3,50.0,19.02,1\nS3,50.0,19.01,2\nS3,50.0,19.0,3\n");
+        return tables;
+    }
+
     public static byte[] invalidReference() {
         var tables = tables("25:30:00");
         tables.put("trips.txt", tables.get("trips.txt").replace("001,R01,", "001,missing-route,"));

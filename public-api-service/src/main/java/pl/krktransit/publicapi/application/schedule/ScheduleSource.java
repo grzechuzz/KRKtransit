@@ -4,6 +4,8 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface ScheduleSource {
+    LineRoutes lineRoutes(String lineNumber);
+
     Optional<String> currentHash(FeedId feed);
 
     TripSummaries tripSummaries(String hash, Set<String> tripIds);

@@ -8,7 +8,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import javax.sql.DataSource;
 import pl.krktransit.schedule.application.port.ScheduleReader;
 import pl.krktransit.schedule.application.querying.GeometryPoint;
@@ -17,10 +22,44 @@ import pl.krktransit.schedule.application.querying.ShapeContext;
 import pl.krktransit.schedule.application.querying.TripContext;
 import pl.krktransit.schedule.application.querying.TripStop;
 import pl.krktransit.schedule.domain.feed.FeedId;
+import pl.krktransit.schedule.domain.lineroute.RoutePoint;
+import pl.krktransit.schedule.domain.lineroute.RouteStop;
+import pl.krktransit.schedule.domain.lineroute.RouteVariant;
+import pl.krktransit.schedule.domain.lineroute.StopKey;
 import pl.krktransit.schedule.domain.schedule.ScheduleHash;
 
 public final class PostgresScheduleReader implements ScheduleReader {
     private static final Duration RETENTION = Duration.ofHours(24);
+    private static final String LINE_VARIANTS_SQL = """
+            WITH trip_patterns AS (
+                SELECT t.version_key, t.trip_id, t.headsign, t.shape_id,
+                    array_agg(st.stop_id ORDER BY st.stop_sequence) AS stop_ids
+                FROM gtfs_schedule.feeds f
+                JOIN gtfs_schedule.trips t ON t.version_key = f.current_version_key
+                JOIN gtfs_schedule.routes r ON r.version_key = t.version_key AND r.route_id = t.route_id
+                JOIN gtfs_schedule.stop_times st ON st.version_key = t.version_key AND st.trip_id = t.trip_id
+                WHERE r.route_short_name = ?
+                GROUP BY t.version_key, t.trip_id, t.headsign, t.shape_id
+            ), variants AS (
+                SELECT version_key, stop_ids, count(*) AS trips_count, min(shape_id) AS shape_id
+                FROM trip_patterns GROUP BY version_key, stop_ids
+            ), names AS (
+                SELECT version_key, stop_ids, coalesce(headsign, '') AS headsign, count(*) AS headsign_count
+                FROM trip_patterns GROUP BY version_key, stop_ids, coalesce(headsign, '')
+            )
+            SELECT v.*, n.headsign, n.headsign_count FROM variants v JOIN names n
+                ON n.version_key = v.version_key AND n.stop_ids = v.stop_ids
+            ORDER BY v.version_key, v.stop_ids, n.headsign
+            """;
+    private static final String LINE_STOPS_SQL = """
+            SELECT stop_id, stop_name, stop_desc, stop_lat, stop_lon FROM gtfs_schedule.stops
+            WHERE version_key = ? AND stop_id = ANY (?)
+            """;
+    private static final String LINE_SHAPES_SQL = """
+            SELECT shape_id, shape_pt_lat, shape_pt_lon FROM gtfs_schedule.shape_points
+            WHERE version_key = ? AND shape_id = ANY (?)
+            ORDER BY shape_id, shape_pt_sequence, point_key
+            """;
     private static final String AVAILABLE_VERSION = "v.zip_hash = ? AND v.deleting_at IS NULL "
             + "AND (v.superseded_at IS NULL OR v.superseded_at > ?)";
     private static final String CURRENT_HASH_SQL = "SELECT v.zip_hash FROM gtfs_schedule.feeds f "
@@ -50,6 +89,127 @@ public final class PostgresScheduleReader implements ScheduleReader {
     public PostgresScheduleReader(DataSource source, Clock clock) {
         this.source = source;
         this.clock = clock;
+    }
+
+    @Override
+    public List<RouteVariant> lineRouteVariants(String lineNumber) {
+        try (var transaction = PostgresTransaction.read(source)) {
+            var connection = transaction.connection();
+            var variants = lineVariants(connection, lineNumber);
+            var versions = new LinkedHashSet<Long>();
+            variants.keySet().forEach(key -> versions.add(key.version()));
+            var result = new ArrayList<RouteVariant>();
+            for (long version : versions) {
+                result.addAll(variantsForVersion(connection, version, variants));
+            }
+            return List.copyOf(result);
+        } catch (SQLException failure) {
+            throw PostgresFailures.translate("read line routes", failure);
+        }
+    }
+
+    private List<RouteVariant> variantsForVersion(Connection connection, long version,
+                                                  Map<VariantKey, VariantProjection> variants) throws SQLException {
+        var selected = variants.entrySet().stream().filter(entry -> entry.getKey().version() == version).toList();
+        var stopIds = new LinkedHashSet<String>();
+        var shapeIds = new LinkedHashSet<String>();
+        selected.forEach(entry -> {
+            stopIds.addAll(entry.getKey().stopIds());
+            if (entry.getValue().shapeId != null) shapeIds.add(entry.getValue().shapeId);
+        });
+        return drawableVariants(selected, lineStops(connection, version, stopIds), lineShapes(connection, version, shapeIds));
+    }
+
+    private List<RouteVariant> drawableVariants(List<Map.Entry<VariantKey, VariantProjection>> variants,
+                                                Map<String, RouteStop> stops, Map<String, List<RoutePoint>> shapes) {
+        var result = new ArrayList<RouteVariant>();
+        for (var entry : variants) {
+            var projection = entry.getValue();
+            var ordered = entry.getKey().stopIds().stream().map(stops::get).toList();
+            var points = shapes.getOrDefault(projection.shapeId, List.of());
+            if (drawable(ordered, points)) {
+                result.add(new RouteVariant(ordered, projection.tripsCount, projection.headsignCounts, points));
+            }
+        }
+        return result;
+    }
+
+    private Map<VariantKey, VariantProjection> lineVariants(Connection connection, String line) throws SQLException {
+        var variants = new LinkedHashMap<VariantKey, VariantProjection>();
+        try (var statement = connection.prepareStatement(LINE_VARIANTS_SQL)) {
+            statement.setString(1, line);
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    var array = rows.getArray("stop_ids");
+                    List<String> stops;
+                    try { stops = List.of((String[]) array.getArray()); }
+                    finally { array.free(); }
+                    var key = new VariantKey(rows.getLong("version_key"), stops);
+                    var projection = variants.get(key);
+                    if (projection == null) {
+                        projection = new VariantProjection(rows.getLong("trips_count"), rows.getString("shape_id"));
+                        variants.put(key, projection);
+                    }
+                    projection.headsignCounts.put(rows.getString("headsign"), rows.getLong("headsign_count"));
+                }
+            }
+        }
+        return variants;
+    }
+
+    private Map<String, RouteStop> lineStops(Connection connection, long version, Set<String> ids) throws SQLException {
+        var result = new HashMap<String, RouteStop>();
+        var array = connection.createArrayOf("text", ids.toArray(String[]::new));
+        try (var statement = connection.prepareStatement(LINE_STOPS_SQL)) {
+            statement.setLong(1, version);
+            statement.setArray(2, array);
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    var latitude = rows.getObject("stop_lat", Double.class);
+                    var longitude = rows.getObject("stop_lon", Double.class);
+                    if (latitude == null || longitude == null) continue;
+                    var name = rows.getString("stop_name");
+                    var description = rows.getString("stop_desc");
+                    result.put(rows.getString("stop_id"), new RouteStop(StopKey.of(name, description), name,
+                            description == null ? "" : description, latitude, longitude));
+                }
+            }
+        } finally { array.free(); }
+        return result;
+    }
+
+    private Map<String, List<RoutePoint>> lineShapes(Connection connection, long version, Set<String> ids) throws SQLException {
+        var result = new HashMap<String, List<RoutePoint>>();
+        if (ids.isEmpty()) return result;
+        var array = connection.createArrayOf("text", ids.toArray(String[]::new));
+        try (var statement = connection.prepareStatement(LINE_SHAPES_SQL)) {
+            statement.setLong(1, version);
+            statement.setArray(2, array);
+            try (var rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    result.computeIfAbsent(rows.getString("shape_id"), ignored -> new ArrayList<>())
+                            .add(new RoutePoint(rows.getDouble("shape_pt_lat"), rows.getDouble("shape_pt_lon")));
+                }
+            }
+        } finally { array.free(); }
+        return result;
+    }
+
+    private static boolean drawable(List<RouteStop> stops, List<RoutePoint> points) {
+        return stops.size() >= 2 && stops.stream().allMatch(java.util.Objects::nonNull) && points.size() >= 2;
+    }
+
+    private record VariantKey(long version, List<String> stopIds) {}
+
+    private static final class VariantProjection {
+        private final long tripsCount;
+        private final String shapeId;
+        private final Map<String, Long> headsignCounts = new HashMap<>();
+
+        private VariantProjection(long tripsCount, String shapeId) {
+            this.tripsCount = tripsCount;
+            this.shapeId = shapeId;
+        }
     }
 
     @Override

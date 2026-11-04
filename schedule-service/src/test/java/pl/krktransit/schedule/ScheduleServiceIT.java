@@ -39,6 +39,7 @@ import pl.krktransit.schedule.application.importing.PublicationOutcome;
 import pl.krktransit.schedule.bootstrap.ScheduleApplication;
 import pl.krktransit.schedule.contracts.v1.FeedId;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashRequest;
+import pl.krktransit.schedule.contracts.v1.GetLineRoutesRequest;
 import pl.krktransit.schedule.contracts.v1.GetShapeRequest;
 import pl.krktransit.schedule.contracts.v1.GetTripContextRequest;
 import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
@@ -104,6 +105,38 @@ class ScheduleServiceIT {
         try (var connection = POSTGRES.dataSource().getConnection(); var sql = connection.createStatement()) {
             sql.execute(RESET_SCHEDULE_SQL);
         }
+    }
+
+    @Test
+    void lineRoutesUseCurrentVersionsAcrossFeedsAndIgnoreDirectionIdsAndShapeVariants() {
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> {
+            var tables = GtfsFixtures.lineRoutes();
+            try (var provider = new FixtureProvider(GtfsFixtures.zip(tables));
+                 var application = application(provider); var client = new LiveClient(application)) {
+                var runner = application.getBean(ImportCycleRunner.class);
+                assertThat(runner.runCycle().outcomes()).allSatisfy(outcome -> assertThat(outcome.failure()).isNull());
+                var request = GetLineRoutesRequest.newBuilder().setLineNumber("198").build();
+                var result = client.stub().getLineRoutes(request);
+                assertThat(result.getDirectionsList()).hasSize(2);
+                assertThat(result.getDirections(0).getTripsCount()).isEqualTo(6);
+                assertThat(result.getDirections(1).getTripsCount()).isEqualTo(3);
+                assertThat(result.getDirections(0).getHeadsign()).isEqualTo("End");
+                assertThat(result.getDirections(0).getStops(0).getStopKey()).isEqualTo("ur al. 29 listopada|01");
+                assertThat(result.getDirections(0).getStops(1).getStopDesc()).isEmpty();
+                var segments = result.getDirections(0).getSegmentsList();
+                assertThat(segments).hasSize(2);
+                assertThat(segments.get(0).getPointsList().getLast()).isEqualTo(segments.get(1).getPointsList().getFirst());
+                tables.put("routes.txt", "route_id,route_short_name\nR,199\n");
+                provider.set("mobilis", GtfsFixtures.zip(tables));
+                assertThat(runner.runCycle().outcomes()).allSatisfy(outcome -> assertThat(outcome.failure()).isNull());
+                assertThat(client.stub().getLineRoutes(request).getDirections(0).getTripsCount()).isEqualTo(4);
+                assertThat(client.stub().getLineRoutes(request.toBuilder().setLineNumber("199").build())
+                        .getDirections(0).getTripsCount()).isEqualTo(2);
+                assertThat(client.stub().getLineRoutes(request.toBuilder().setLineNumber("999").build()).getDirectionsList()).isEmpty();
+                assertThatThrownBy(() -> client.anonymous().getLineRoutes(request)).isInstanceOfSatisfying(StatusRuntimeException.class,
+                        failure -> assertThat(failure.getStatus().getCode()).isEqualTo(Status.Code.UNAUTHENTICATED));
+            }
+        });
     }
 
     @Test
@@ -220,6 +253,8 @@ class ScheduleServiceIT {
             assertThat(trip.getStopsCount()).isEqualTo(3);
             assertThat(trip.getStops(0).hasLatitude()).isFalse();
             assertThat(trip.getStops(0).hasLongitude()).isFalse();
+            assertThat(client.stub().getLineRoutes(GetLineRoutesRequest.newBuilder()
+                    .setLineNumber("001").build()).getDirectionsList()).isEmpty();
             assertShape(client, hash);
         }
         assertDownloadsRemoved();

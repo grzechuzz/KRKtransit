@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.Set;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
+import pl.krktransit.publicapi.application.schedule.LineRoutes;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.schedule.Shape;
 import pl.krktransit.publicapi.application.schedule.TripStops;
@@ -24,12 +25,13 @@ public final class CachedScheduleSource implements ScheduleSource {
     private final ScheduleSource delegate;
     private final Cache<TripKey, CachedTrip> trips;
     private final Cache<TripKey, Optional<TripStops>> tripStops;
+    private final Cache<String, LineRoutes> lineRoutes;
     private final Cache<FeedId, CurrentHash> hashes = Caffeine.newBuilder().maximumSize(MAXIMUM_FEEDS).build();
     private final Duration hashRefresh;
     private final Clock clock;
 
     public CachedScheduleSource(ScheduleSource delegate, int tripCacheSize, int tripStopsCacheSize, Duration hashRefresh,
-                                Clock clock) {
+                                int lineRoutesCacheSize, Duration lineRoutesCacheTtl, Clock clock) {
         if (!validLimits(tripCacheSize, tripStopsCacheSize, hashRefresh)) {
             throw new IllegalArgumentException("Cache limits must be positive");
         }
@@ -38,6 +40,20 @@ public final class CachedScheduleSource implements ScheduleSource {
         this.tripStops = Caffeine.newBuilder().maximumSize(tripStopsCacheSize).build();
         this.hashRefresh = hashRefresh;
         this.clock = clock;
+        if (lineRoutesCacheSize <= 0 || lineRoutesCacheTtl == null || !lineRoutesCacheTtl.isPositive()) {
+            throw new IllegalArgumentException("Line routes cache limits must be positive");
+        }
+        this.lineRoutes = Caffeine.newBuilder().maximumSize(lineRoutesCacheSize).expireAfterWrite(lineRoutesCacheTtl)
+                .ticker(() -> java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(clock.millis())).build();
+    }
+
+    @Override
+    public LineRoutes lineRoutes(String lineNumber) {
+        var cached = lineRoutes.getIfPresent(lineNumber);
+        if (cached != null) return cached;
+        var loaded = delegate.lineRoutes(lineNumber);
+        if (!loaded.directions().isEmpty()) lineRoutes.put(lineNumber, loaded);
+        return loaded;
     }
 
     @Override

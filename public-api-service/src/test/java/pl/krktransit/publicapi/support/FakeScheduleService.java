@@ -8,6 +8,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashRequest;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashResponse;
+import pl.krktransit.schedule.contracts.v1.GetLineRoutesRequest;
+import pl.krktransit.schedule.contracts.v1.GetLineRoutesResponse;
 import pl.krktransit.schedule.contracts.v1.GetShapeRequest;
 import pl.krktransit.schedule.contracts.v1.GetShapeResponse;
 import pl.krktransit.schedule.contracts.v1.GetTripContextRequest;
@@ -15,6 +17,9 @@ import pl.krktransit.schedule.contracts.v1.GetTripContextResponse;
 import pl.krktransit.schedule.contracts.v1.ScheduleServiceGrpc;
 
 public final class FakeScheduleService extends ScheduleServiceGrpc.ScheduleServiceImplBase {
+    public final Map<String, GetLineRoutesResponse> lineRoutes = new ConcurrentHashMap<>();
+    public final AtomicInteger lineRoutesCalls = new AtomicInteger();
+    public volatile String lastLineNumber;
     public final Map<String, String> hashes = new ConcurrentHashMap<>();
     public final Map<String, GetTripContextResponse> trips = new ConcurrentHashMap<>();
     public final Map<String, GetShapeResponse> shapes = new ConcurrentHashMap<>();
@@ -31,6 +36,9 @@ public final class FakeScheduleService extends ScheduleServiceGrpc.ScheduleServi
     public static String tripKey(String hash, String tripId) { return hash + "/" + tripId; }
 
     public void reset() {
+        lineRoutes.clear();
+        lineRoutesCalls.set(0);
+        lastLineNumber = null;
         hashes.clear();
         trips.clear();
         shapes.clear();
@@ -40,6 +48,15 @@ public final class FakeScheduleService extends ScheduleServiceGrpc.ScheduleServi
         maximumConcurrentTripCalls.set(0);
         tripDelay = Duration.ZERO;
         failure = null;
+    }
+
+    @Override
+    public void getLineRoutes(GetLineRoutesRequest request,
+                              StreamObserver<GetLineRoutesResponse> observer) {
+        lineRoutesCalls.incrementAndGet();
+        lastLineNumber = request.getLineNumber();
+        respond(lineRoutes.getOrDefault(request.getLineNumber(),
+                GetLineRoutesResponse.getDefaultInstance()), failure, observer);
     }
 
     @Override

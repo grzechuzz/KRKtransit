@@ -29,9 +29,11 @@ import pl.krktransit.schedule.application.querying.TripContext;
 import pl.krktransit.schedule.application.querying.TripStop;
 import pl.krktransit.schedule.contracts.v1.FeedId;
 import pl.krktransit.schedule.contracts.v1.GetCurrentHashRequest;
+import pl.krktransit.schedule.contracts.v1.GetLineRoutesRequest;
 import pl.krktransit.schedule.contracts.v1.GetShapeRequest;
 import pl.krktransit.schedule.contracts.v1.GetTripContextRequest;
 import pl.krktransit.schedule.contracts.v1.ScheduleServiceGrpc;
+import pl.krktransit.schedule.domain.lineroute.RouteVariant;
 import pl.krktransit.schedule.domain.schedule.ScheduleHash;
 
 class ScheduleGrpcEndpointTest {
@@ -55,6 +57,16 @@ class ScheduleGrpcEndpointTest {
     void stopServer() throws InterruptedException {
         channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
         server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void lineRoutesReturnAnEmptyListAndValidateTheLineNumber() {
+        assertThat(client.getLineRoutes(GetLineRoutesRequest.newBuilder()
+                .setLineNumber("198").build()).getDirectionsList()).isEmpty();
+        for (String line : List.of("", "123456", "bad\u0000", "' OR 1=1")) {
+            assertStatus(Status.Code.INVALID_ARGUMENT, () -> client.getLineRoutes(
+                    GetLineRoutesRequest.newBuilder().setLineNumber(line).build()));
+        }
     }
 
     @Test
@@ -171,6 +183,10 @@ class ScheduleGrpcEndpointTest {
     }
 
     private static final class StubReader implements ScheduleReader {
+        @Override public java.util.List<RouteVariant> lineRouteVariants(String lineNumber) {
+            return java.util.List.of();
+        }
+
         private pl.krktransit.schedule.domain.feed.FeedId feed;
         private LookupFailure.Kind lookupFailure;
         private ImportFailure.Kind storageFailure;

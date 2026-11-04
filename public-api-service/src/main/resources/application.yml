@@ -37,11 +37,13 @@ public-api:
   schedule:
     address: ${PUBLIC_API_SCHEDULE_ADDRESS:static://127.0.0.1:9090}
     token: ${PUBLIC_API_SCHEDULE_TOKEN:}
-    deadline: 2s
+    deadline: 5s
     trip-cache-size: 50000
     trip-stops-cache-size: 5000
     hash-refresh: 30s
     maximum-concurrent-lookups: 32
+    line-routes-cache-size: 512
+    line-routes-cache-ttl: 5m
   live-vehicles:
     address: ${PUBLIC_API_LIVE_VEHICLES_ADDRESS:static://127.0.0.1:9091}
     token: ${PUBLIC_API_LIVE_VEHICLES_TOKEN:}
@@ -54,6 +56,8 @@ public-api:
   rate-limits:
     maximum-tracked-clients: 100000
     routes:
+      - path: /v1/lines/{line_number}/stats/delay-map
+        per-minute: ${PUBLIC_API_STATISTICS_PER_MINUTE:20}
       - path: /v1/lines/{line_number}/stats/max-delay
         per-minute: ${PUBLIC_API_STATISTICS_PER_MINUTE:20}
       - path: /v1/lines/{line_number}/stats/route-delay

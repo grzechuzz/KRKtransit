@@ -54,11 +54,11 @@ public record PublicApiProperties(List<String> allowedOrigins, Statistics statis
     }
 
     public record Schedule(String address, String token, Duration deadline, int tripCacheSize, int tripStopsCacheSize,
-                           Duration hashRefresh, int maximumConcurrentLookups) {
+                           Duration hashRefresh, int maximumConcurrentLookups, int lineRoutesCacheSize, Duration lineRoutesCacheTtl) {
         public Schedule {
             requireAddress(address);
-            requirePositive(deadline, hashRefresh);
-            requirePositive(tripCacheSize, tripStopsCacheSize, maximumConcurrentLookups);
+            requirePositive(deadline, hashRefresh, lineRoutesCacheTtl);
+            requirePositive(tripCacheSize, tripStopsCacheSize, maximumConcurrentLookups, lineRoutesCacheSize);
         }
 
         public GrpcCallSettings calls() { return new GrpcCallSettings(token, deadline); }
