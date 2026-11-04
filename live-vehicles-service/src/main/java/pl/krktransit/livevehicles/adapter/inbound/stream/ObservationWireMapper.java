@@ -22,6 +22,10 @@ public final class ObservationWireMapper {
     private static final int INCOMING_AT = 0;
     private static final int STOPPED_AT = 1;
     private static final int IN_TRANSIT_TO = 2;
+    private static final int STOP_SKIPPED = 1;
+    private static final int STOP_NO_DATA = 2;
+    private static final int TRIP_CANCELED = 3;
+    private static final int TRIP_DELETED = 7;
 
     public Optional<LiveObservation> decode(SourceId source, String streamId, byte[] payload)
             throws InvalidProtocolBufferException {
@@ -50,10 +54,25 @@ public final class ObservationWireMapper {
     }
 
     private List<StopForecast> stops(SourceId source, TripUpdate update) {
+        if (tripRemoved(update)) return List.of();
         return update.getStopTimeUpdatesList().stream().filter(this::usableForecast).map(stop -> stop(source, stop)).toList();
     }
 
-    private boolean usableForecast(StopTimeUpdate stop) { return hasArrivalTime(stop) && hasStopIdentity(stop); }
+    private boolean tripRemoved(TripUpdate update) {
+        return update.hasTripScheduleRelationship() && removal(update.getTripScheduleRelationship());
+    }
+
+    private boolean removal(int relationship) { return relationship == TRIP_CANCELED || relationship == TRIP_DELETED; }
+
+    private boolean usableForecast(StopTimeUpdate stop) {
+        return !withoutEstimate(stop) && hasArrivalTime(stop) && hasStopIdentity(stop);
+    }
+
+    private boolean withoutEstimate(StopTimeUpdate stop) {
+        return stop.hasScheduleRelationship() && noEstimate(stop.getScheduleRelationship());
+    }
+
+    private boolean noEstimate(int relationship) { return relationship == STOP_SKIPPED || relationship == STOP_NO_DATA; }
 
     private boolean hasArrivalTime(StopTimeUpdate stop) {
         return stop.hasArrival() && validProviderTime(stop.getArrival().hasTime(), stop.getArrival().getTime());

@@ -23,6 +23,8 @@ public record LiveVehiclesProperties(boolean jobsEnabled, List<Source> sources, 
 
     public Set<SourceId> sourceIds() { return sources.stream().map(Source::id).collect(Collectors.toUnmodifiableSet()); }
 
+    public Duration replayWindow() { return retention.compareTo(forecastRetention) >= 0 ? retention : forecastRetention; }
+
     @Override
     public String toString() { return "LiveVehiclesProperties[sources=" + sources + "]"; }
 

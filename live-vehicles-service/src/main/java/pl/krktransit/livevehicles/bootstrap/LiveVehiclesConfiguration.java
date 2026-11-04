@@ -72,7 +72,7 @@ class LiveVehiclesConfiguration {
     @Bean(destroyMethod = "close")
     ProjectionLoop projectionLoop(ObservationSource source, VehiclePositions positions, TripForecasts forecasts,
                                   LiveVehiclesProperties properties, Clock clock) {
-        return new ProjectionLoop(source, positions, forecasts, properties.sourceIds(), properties.retention(),
+        return new ProjectionLoop(source, positions, forecasts, properties.sourceIds(), properties.replayWindow(),
                 properties.retryDelay(), properties.shutdownTimeout(), clock);
     }
 

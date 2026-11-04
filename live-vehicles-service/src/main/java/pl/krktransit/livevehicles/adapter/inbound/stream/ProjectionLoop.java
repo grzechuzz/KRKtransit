@@ -17,7 +17,7 @@ public final class ProjectionLoop implements AutoCloseable {
     private final VehiclePositions positions;
     private final TripForecasts forecasts;
     private final Set<SourceId> sources;
-    private final Duration retention;
+    private final Duration replayWindow;
     private final Duration retryDelay;
     private final Duration shutdownTimeout;
     private final Clock clock;
@@ -25,12 +25,12 @@ public final class ProjectionLoop implements AutoCloseable {
     private Thread worker;
 
     public ProjectionLoop(ObservationSource source, VehiclePositions positions, TripForecasts forecasts, Set<SourceId> sources,
-                          Duration retention, Duration retryDelay, Duration shutdownTimeout, Clock clock) {
+                          Duration replayWindow, Duration retryDelay, Duration shutdownTimeout, Clock clock) {
         this.source = source;
         this.positions = positions;
         this.forecasts = forecasts;
         this.sources = Set.copyOf(sources);
-        this.retention = retention;
+        this.replayWindow = replayWindow;
         this.retryDelay = retryDelay;
         this.shutdownTimeout = shutdownTimeout;
         this.clock = clock;
@@ -67,7 +67,7 @@ public final class ProjectionLoop implements AutoCloseable {
 
     private Map<SourceId, String> resumeFrom(Map<SourceId, String> cursors) {
         if (cursors != null) return cursors;
-        return source.recentCursors(sources, retention);
+        return source.recentCursors(sources, replayWindow);
     }
 
     private void project(ObservationSource.ReadBatch batch) {

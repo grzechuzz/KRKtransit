@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.protobuf.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import pl.krktransit.livevehicles.adapter.outbound.memory.InMemoryTripForecasts;
 import pl.krktransit.livevehicles.domain.SourceId;
 import pl.krktransit.livevehicles.domain.StopForecast;
 import pl.krktransit.livevehicles.domain.StopProgress;
@@ -133,6 +137,50 @@ class ObservationWireMapperTest {
         assertThat(mapper.decode(SOURCE, "123-1", envelope().setTripUpdate(TripUpdate.newBuilder().setTripId(" ")).build().toByteArray())).isEmpty();
         assertThat(mapper.decode(SOURCE, "123-1", envelope().clearFetchedAt().setTripUpdate(TripUpdate.newBuilder().setTripId("trip")).build().toByteArray())).isEmpty();
         assertThat(mapper.decode(SOURCE, "123-1", envelope().build().toByteArray())).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {3, 7})
+    void removedTripsHaveNoForecastEvenWhenTheyCarryTimes(int relationship) throws Exception {
+        assertThat(mapper.decode(SOURCE, "123-1", tripUpdate(relationship, 100))).contains(
+                new TripForecast("krakow:mpk-bus:trip", Instant.ofEpochSecond(100), List.of()));
+    }
+
+    @Test
+    void cancellationClearsThePreviousForecastOfTheTrip() throws Exception {
+        var forecasts = new InMemoryTripForecasts(Duration.ofMinutes(5), 10);
+        var now = Instant.ofEpochSecond(101);
+        forecasts.accept((TripForecast) mapper.decode(SOURCE, "123-1", tripUpdate(0, 100)).orElseThrow(), now);
+        assertThat(forecasts.find("krakow:mpk-bus:trip", now)).get().satisfies(forecast -> assertThat(forecast.stops()).hasSize(1));
+        forecasts.accept((TripForecast) mapper.decode(SOURCE, "123-2", tripUpdate(3, 101)).orElseThrow(), now);
+        assertThat(forecasts.find("krakow:mpk-bus:trip", now)).get().satisfies(forecast -> assertThat(forecast.stops()).isEmpty());
+    }
+
+    @Test
+    void addedAndDuplicatedTripsKeepTheirForecast() throws Exception {
+        assertThat(mapper.decode(SOURCE, "123-1", tripUpdate(1, 100))).get().satisfies(observation ->
+                assertThat(((TripForecast) observation).stops()).hasSize(1));
+        assertThat(mapper.decode(SOURCE, "123-1", tripUpdate(6, 100))).get().satisfies(observation ->
+                assertThat(((TripForecast) observation).stops()).hasSize(1));
+    }
+
+    @Test
+    void skippedAndNoDataStopsAreDroppedWhileOtherStopsStay() throws Exception {
+        var observation = envelope().setTripUpdate(TripUpdate.newBuilder().setTripId("trip")
+                .addStopTimeUpdates(arrival(200).setStopId("skipped").setScheduleRelationship(1))
+                .addStopTimeUpdates(arrival(300).setStopId("no-data").setScheduleRelationship(2))
+                .addStopTimeUpdates(arrival(400).setStopId("scheduled").setScheduleRelationship(0))
+                .addStopTimeUpdates(arrival(500).setStopId("absent"))).build();
+        assertThat(mapper.decode(SOURCE, "123-1", observation.toByteArray())).contains(new TripForecast(
+                "krakow:mpk-bus:trip", Instant.ofEpochSecond(100), List.of(
+                new StopForecast(null, "krakow:mpk-bus:scheduled", Instant.ofEpochSecond(400)),
+                new StopForecast(null, "krakow:mpk-bus:absent", Instant.ofEpochSecond(500)))));
+    }
+
+    private byte[] tripUpdate(int relationship, long fetchedSeconds) {
+        return envelope().setFetchedAt(Timestamp.newBuilder().setSeconds(fetchedSeconds))
+                .setTripUpdate(TripUpdate.newBuilder().setTripId("trip").setTripScheduleRelationship(relationship)
+                        .addStopTimeUpdates(arrival(200).setStopId("stop"))).build().toByteArray();
     }
 
     private StopTimeUpdate.Builder arrival(long seconds) {
