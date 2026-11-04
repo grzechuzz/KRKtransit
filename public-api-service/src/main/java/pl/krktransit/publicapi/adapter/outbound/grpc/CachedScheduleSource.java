@@ -49,7 +49,11 @@ public final class CachedScheduleSource implements ScheduleSource {
 
     @Override
     public LineRoutes lineRoutes(String lineNumber) {
-        return lineRoutes.get(lineNumber, delegate::lineRoutes);
+        var cached = lineRoutes.getIfPresent(lineNumber);
+        if (cached != null) return cached;
+        var loaded = delegate.lineRoutes(lineNumber);
+        if (!loaded.directions().isEmpty()) lineRoutes.put(lineNumber, loaded);
+        return loaded;
     }
 
     @Override

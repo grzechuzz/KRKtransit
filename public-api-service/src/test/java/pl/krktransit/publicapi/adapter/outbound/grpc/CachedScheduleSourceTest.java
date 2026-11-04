@@ -16,6 +16,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import pl.krktransit.publicapi.application.ApiFailure;
 import pl.krktransit.publicapi.application.schedule.FeedId;
+import pl.krktransit.publicapi.application.schedule.LineDirection;
 import pl.krktransit.publicapi.application.schedule.LineRoutes;
 import pl.krktransit.publicapi.application.schedule.ScheduleSource;
 import pl.krktransit.publicapi.application.schedule.Shape;
@@ -28,23 +29,41 @@ import pl.krktransit.publicapi.support.MutableClock;
 class CachedScheduleSourceTest {
     private static final FeedId BUS = new FeedId("krakow", "mpk-bus");
     private static final TripSummary SUMMARY = new TripSummary("194", "Krowodrza", null);
+    private static final LineRoutes ROUTES = new LineRoutes(List.of(new LineDirection("Krowodrza", 10, List.of(), List.of())));
     private final MutableClock clock = new MutableClock(Instant.parse("2026-10-30T10:00:00Z"));
     private final Delegate delegate = new Delegate();
     private final CachedScheduleSource cache = new CachedScheduleSource(delegate, 100, 100, Duration.ofSeconds(30), 512, Duration.ofMinutes(5), clock);
 
     @Test
-    void cachesLineRoutesIncludingEmptyResultsUntilExpiryButNeverCachesFailures() {
-        assertThat(cache.lineRoutes("198").directions()).isEmpty();
+    void cachesLoadedLineRoutesUntilExpiry() {
+        delegate.routes = ROUTES;
+        assertThat(cache.lineRoutes("198")).isEqualTo(ROUTES);
         cache.lineRoutes("198");
         assertThat(delegate.routeRequests).containsExactly("198");
         clock.advance(Duration.ofMinutes(5));
         cache.lineRoutes("198");
         assertThat(delegate.routeRequests).containsExactly("198", "198");
+    }
+
+    @Test
+    void asksAgainAfterEmptyLineRoutesSoAFinishedImportIsVisibleImmediately() {
+        assertThat(cache.lineRoutes("198").directions()).isEmpty();
+        assertThat(cache.lineRoutes("198").directions()).isEmpty();
+        assertThat(delegate.routeRequests).containsExactly("198", "198");
+
+        delegate.routes = ROUTES;
+        assertThat(cache.lineRoutes("198")).isEqualTo(ROUTES);
+        assertThat(cache.lineRoutes("198")).isEqualTo(ROUTES);
+        assertThat(delegate.routeRequests).containsExactly("198", "198", "198");
+    }
+
+    @Test
+    void neverCachesLineRouteFailures() {
         delegate.routeFailure = new ApiFailure.UpstreamUnavailable("Schedule service", null);
         assertThatThrownBy(() -> cache.lineRoutes("999")).isInstanceOf(ApiFailure.UpstreamUnavailable.class);
         delegate.routeFailure = null;
         cache.lineRoutes("999");
-        assertThat(delegate.routeRequests).containsExactly("198", "198", "999", "999");
+        assertThat(delegate.routeRequests).containsExactly("999", "999");
     }
 
     @Test
@@ -102,11 +121,12 @@ class CachedScheduleSourceTest {
 
     private static final class Delegate implements ScheduleSource {
         private final List<String> routeRequests = new ArrayList<>();
+        private LineRoutes routes = new LineRoutes(List.of());
         private ApiFailure routeFailure;
         @Override public LineRoutes lineRoutes(String lineNumber) {
             routeRequests.add(lineNumber);
             if (routeFailure != null) throw routeFailure;
-            return new LineRoutes(java.util.List.of());
+            return routes;
         }
 
         private final Map<String, TripSummary> found = new HashMap<>();
