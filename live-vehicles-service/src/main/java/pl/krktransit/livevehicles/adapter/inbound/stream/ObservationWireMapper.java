@@ -3,27 +3,69 @@ package pl.krktransit.livevehicles.adapter.inbound.stream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.time.DateTimeException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import pl.krktransit.livevehicles.domain.LiveObservation;
 import pl.krktransit.livevehicles.domain.SourceId;
+import pl.krktransit.livevehicles.domain.StopForecast;
 import pl.krktransit.livevehicles.domain.StopProgress;
 import pl.krktransit.livevehicles.domain.StreamId;
+import pl.krktransit.livevehicles.domain.TripForecast;
 import pl.krktransit.livevehicles.domain.VehiclePosition;
 import pl.krktransit.livevehicles.domain.VehicleStopStatus;
 import pl.krktransit.realtime.contracts.v1.Observation;
 import pl.krktransit.realtime.contracts.v1.Position;
+import pl.krktransit.realtime.contracts.v1.StopTimeUpdate;
+import pl.krktransit.realtime.contracts.v1.TripUpdate;
 
 public final class ObservationWireMapper {
     private static final int INCOMING_AT = 0;
     private static final int STOPPED_AT = 1;
     private static final int IN_TRANSIT_TO = 2;
 
-    public Optional<VehiclePosition> decode(SourceId source, String streamId, byte[] payload)
+    public Optional<LiveObservation> decode(SourceId source, String streamId, byte[] payload)
             throws InvalidProtocolBufferException {
         var observation = parse(payload);
         validateSource(source, observation);
-        if (!observation.hasVehiclePosition()) return Optional.empty();
+        return switch (observation.getPayloadCase()) {
+            case VEHICLE_POSITION -> vehiclePosition(source, streamId, observation);
+            case TRIP_UPDATE -> tripForecast(source, observation);
+            case PAYLOAD_NOT_SET -> Optional.empty();
+        };
+    }
+
+    private Optional<LiveObservation> vehiclePosition(SourceId source, String streamId, Observation observation) {
         if (!eligible(observation)) return Optional.empty();
         return Optional.of(position(source, streamId, observation));
+    }
+
+    private Optional<LiveObservation> tripForecast(SourceId source, Observation observation) {
+        var update = observation.getTripUpdate();
+        if (!forecastEligible(observation, update)) return Optional.empty();
+        return Optional.of(new TripForecast(source.scope(update.getTripId()), fetchedAt(observation), stops(source, update)));
+    }
+
+    private boolean forecastEligible(Observation observation, TripUpdate update) {
+        return observation.hasFetchedAt() && hasText(update.hasTripId(), update.getTripId());
+    }
+
+    private List<StopForecast> stops(SourceId source, TripUpdate update) {
+        return update.getStopTimeUpdatesList().stream().filter(this::usableForecast).map(stop -> stop(source, stop)).toList();
+    }
+
+    private boolean usableForecast(StopTimeUpdate stop) { return hasArrivalTime(stop) && hasStopIdentity(stop); }
+
+    private boolean hasArrivalTime(StopTimeUpdate stop) {
+        return stop.hasArrival() && validProviderTime(stop.getArrival().hasTime(), stop.getArrival().getTime());
+    }
+
+    private boolean hasStopIdentity(StopTimeUpdate stop) {
+        return sequence(stop.hasStopSequence(), stop.getStopSequence()) != null || hasText(stop.hasStopId(), stop.getStopId());
+    }
+
+    private StopForecast stop(SourceId source, StopTimeUpdate stop) {
+        return new StopForecast(sequence(stop.hasStopSequence(), stop.getStopSequence()),
+                scoped(source, stop.hasStopId(), stop.getStopId()), Instant.ofEpochSecond(stop.getArrival().getTime()));
     }
 
     private Observation parse(byte[] payload) throws InvalidProtocolBufferException {
@@ -85,22 +127,16 @@ public final class ObservationWireMapper {
     }
 
     private StopProgress progress(SourceId source, pl.krktransit.realtime.contracts.v1.VehiclePosition vehicle) {
-        return new StopProgress(stopId(source, vehicle), sequence(vehicle), status(vehicle));
+        return new StopProgress(scoped(source, vehicle.hasStopId(), vehicle.getStopId()),
+                sequence(vehicle.hasCurrentStopSequence(), vehicle.getCurrentStopSequence()), status(vehicle));
     }
 
-    private String stopId(SourceId source, pl.krktransit.realtime.contracts.v1.VehiclePosition vehicle) {
-        var original = text(vehicle.hasStopId(), vehicle.getStopId());
+    private String scoped(SourceId source, boolean present, String value) {
+        var original = text(present, value);
         return original == null ? null : source.scope(original);
     }
 
-    private Integer sequence(pl.krktransit.realtime.contracts.v1.VehiclePosition vehicle) {
-        if (!hasRepresentableSequence(vehicle)) return null;
-        return vehicle.getCurrentStopSequence();
-    }
-
-    private boolean hasRepresentableSequence(pl.krktransit.realtime.contracts.v1.VehiclePosition vehicle) {
-        return vehicle.hasCurrentStopSequence() && vehicle.getCurrentStopSequence() >= 0;
-    }
+    private Integer sequence(boolean present, int value) { return present && value >= 0 ? value : null; }
 
     private VehicleStopStatus status(pl.krktransit.realtime.contracts.v1.VehiclePosition vehicle) {
         if (!vehicle.hasCurrentStatus()) return null;

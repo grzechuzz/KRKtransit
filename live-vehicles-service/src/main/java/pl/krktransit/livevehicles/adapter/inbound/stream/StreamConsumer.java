@@ -15,7 +15,9 @@ import java.util.Set;
 import java.util.function.Supplier;
 import pl.krktransit.livevehicles.application.ObservationFailure;
 import pl.krktransit.livevehicles.application.ObservationSource;
+import pl.krktransit.livevehicles.domain.LiveObservation;
 import pl.krktransit.livevehicles.domain.SourceId;
+import pl.krktransit.livevehicles.domain.TripForecast;
 import pl.krktransit.livevehicles.domain.VehiclePosition;
 
 public final class StreamConsumer implements ObservationSource, AutoCloseable {
@@ -69,18 +71,21 @@ public final class StreamConsumer implements ObservationSource, AutoCloseable {
     }
 
     private ReadBatch batch(Map<SourceId, String> cursors, List<StreamMessage<String, byte[]>> entries) {
-        var positions = new ArrayList<VehiclePosition>();
+        var observations = new ArrayList<LiveObservation>();
         var next = new LinkedHashMap<>(cursors);
-        if (entries == null) return new ReadBatch(next, positions);
-        for (var entry : entries) readEntry(entry, next, positions);
-        return new ReadBatch(next, positions);
+        if (entries != null) entries.forEach(entry -> readEntry(entry, next, observations));
+        return new ReadBatch(next, only(observations, VehiclePosition.class), only(observations, TripForecast.class));
     }
 
-    private void readEntry(StreamMessage<String, byte[]> entry, Map<SourceId, String> cursors, List<VehiclePosition> positions) {
+    private <T extends LiveObservation> List<T> only(List<LiveObservation> observations, Class<T> type) {
+        return observations.stream().filter(type::isInstance).map(type::cast).toList();
+    }
+
+    private void readEntry(StreamMessage<String, byte[]> entry, Map<SourceId, String> cursors, List<LiveObservation> observations) {
         var source = streams.get(entry.getStream());
         cursors.put(source, entry.getId());
         try {
-            mapper.decode(source, entry.getId(), entry.getBody().get("payload")).ifPresent(positions::add);
+            mapper.decode(source, entry.getId(), entry.getBody().get("payload")).ifPresent(observations::add);
         } catch (InvalidProtocolBufferException | IllegalArgumentException failure) {
             reportMalformed(source, entry.getId(), failure);
         }

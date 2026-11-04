@@ -29,6 +29,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import pl.krktransit.livevehicles.adapter.inbound.stream.StreamConsumer;
 import pl.krktransit.livevehicles.bootstrap.LiveVehiclesApplication;
+import pl.krktransit.livevehicles.contracts.v1.GetTripForecastRequest;
 import pl.krktransit.livevehicles.contracts.v1.ListVehiclePositionsRequest;
 import pl.krktransit.livevehicles.contracts.v1.LiveVehiclesServiceGrpc;
 import pl.krktransit.livevehicles.domain.SourceId;
@@ -36,6 +37,9 @@ import pl.krktransit.livevehicles.support.OwnedRedis;
 import pl.krktransit.realtime.contracts.v1.Observation;
 import pl.krktransit.realtime.contracts.v1.Position;
 import pl.krktransit.realtime.contracts.v1.Source;
+import pl.krktransit.realtime.contracts.v1.StopTimeEvent;
+import pl.krktransit.realtime.contracts.v1.StopTimeUpdate;
+import pl.krktransit.realtime.contracts.v1.TripUpdate;
 import pl.krktransit.realtime.contracts.v1.VehiclePosition;
 
 @Testcontainers
@@ -63,6 +67,9 @@ class LiveVehiclesServiceIT {
                     connection.sync().xadd(prefix + ":" + source, Map.of("payload", observation(source, "expired", now.minus(Duration.ofHours(2)), 50)));
                     connection.sync().xadd(prefix + ":" + source, Map.of("payload", observation(source, "current", now, 0)));
                     connection.sync().xadd(prefix + ":" + source, Map.of("payload", observation(source, "current", now.minusSeconds(2), 51)));
+                    connection.sync().xadd(prefix + ":" + source, Map.of("payload", forecast(source, now.minus(Duration.ofMinutes(6)), now.getEpochSecond())));
+                    connection.sync().xadd(prefix + ":" + source, Map.of("payload", forecast(source, now, now.getEpochSecond() + 60)));
+                    connection.sync().xadd(prefix + ":" + source, Map.of("payload", forecast(source, now.minusSeconds(2), now.getEpochSecond())));
                 });
             }
             try (var context = application(prefix, user)) { verifyPositions(context); }
@@ -129,8 +136,23 @@ class LiveVehiclesServiceIT {
                 });
                 assertThat(response.getVehiclesList()).extracting(pl.krktransit.livevehicles.contracts.v1.VehiclePosition::getSourceId)
                         .containsExactly("mobilis-bus", "mpk-bus", "mpk-tram");
+                SOURCES.forEach(source -> {
+                    var forecast = stub.withDeadlineAfter(2, TimeUnit.SECONDS).getTripForecast(
+                            GetTripForecastRequest.newBuilder().setTripId(source.scope("trip")).build());
+                    assertThat(forecast.getStopsList()).singleElement().satisfies(stop -> {
+                        assertThat(stop.getStopId()).isEqualTo(source.scope("stop"));
+                        assertThat(stop.getArrivalTime().getSeconds()).isGreaterThan(forecast.getFetchedAt().getSeconds() + 30);
+                    });
+                });
             });
         } finally { channel.shutdownNow(); }
+    }
+
+    private byte[] forecast(SourceId source, Instant fetchedAt, long arrival) {
+        return Observation.newBuilder().setSource(Source.newBuilder().setCityId(source.cityId()).setSourceId(source.sourceId()))
+                .setFetchedAt(Timestamp.newBuilder().setSeconds(fetchedAt.getEpochSecond()).setNanos(fetchedAt.getNano()))
+                .setTripUpdate(TripUpdate.newBuilder().setTripId("trip").addStopTimeUpdates(StopTimeUpdate.newBuilder().setStopId("stop")
+                        .setArrival(StopTimeEvent.newBuilder().setTime(arrival)))).build().toByteArray();
     }
 
     private byte[] observation(SourceId source, String plate, Instant instant, float latitude) {

@@ -12,9 +12,11 @@ import pl.krktransit.livevehicles.adapter.inbound.grpc.BearerTokenInterceptor;
 import pl.krktransit.livevehicles.adapter.inbound.grpc.LiveVehiclesGrpcEndpoint;
 import pl.krktransit.livevehicles.adapter.inbound.stream.ProjectionLoop;
 import pl.krktransit.livevehicles.adapter.inbound.stream.StreamConsumer;
+import pl.krktransit.livevehicles.adapter.outbound.memory.InMemoryTripForecasts;
 import pl.krktransit.livevehicles.adapter.outbound.memory.InMemoryVehiclePositions;
 import pl.krktransit.livevehicles.application.LiveVehicleQueries;
 import pl.krktransit.livevehicles.application.ObservationSource;
+import pl.krktransit.livevehicles.application.TripForecasts;
 import pl.krktransit.livevehicles.application.VehiclePositions;
 
 @Configuration(proxyBeanMethods = false)
@@ -27,6 +29,11 @@ class LiveVehiclesConfiguration {
         return new InMemoryVehiclePositions(properties.retention(), properties.maximumVehicles());
     }
 
+    @Bean
+    TripForecasts tripForecasts(LiveVehiclesProperties properties) {
+        return new InMemoryTripForecasts(properties.forecastRetention(), properties.maximumForecasts());
+    }
+
     @Bean(destroyMethod = "close")
     RedisConnections redisConnections(LiveVehiclesProperties properties) { return new RedisConnections(properties.redis()); }
 
@@ -37,8 +44,8 @@ class LiveVehiclesConfiguration {
     }
 
     @Bean
-    LiveVehicleQueries liveVehicleQueries(VehiclePositions positions, Clock clock) {
-        return new LiveVehicleQueries(positions, clock);
+    LiveVehicleQueries liveVehicleQueries(VehiclePositions positions, TripForecasts forecasts, Clock clock) {
+        return new LiveVehicleQueries(positions, forecasts, clock);
     }
 
     @Bean
@@ -63,9 +70,9 @@ class LiveVehiclesConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    ProjectionLoop projectionLoop(ObservationSource source, VehiclePositions positions,
+    ProjectionLoop projectionLoop(ObservationSource source, VehiclePositions positions, TripForecasts forecasts,
                                   LiveVehiclesProperties properties, Clock clock) {
-        return new ProjectionLoop(source, positions, properties.sourceIds(), properties.retention(),
+        return new ProjectionLoop(source, positions, forecasts, properties.sourceIds(), properties.retention(),
                 properties.retryDelay(), properties.shutdownTimeout(), clock);
     }
 

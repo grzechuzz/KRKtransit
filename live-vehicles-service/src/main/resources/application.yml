@@ -26,6 +26,8 @@ live-vehicles:
   read-block: 1s
   retention: ${LIVE_VEHICLES_RETENTION:10m}
   maximum-vehicles: ${LIVE_VEHICLES_MAXIMUM_VEHICLES:10000}
+  forecast-retention: ${LIVE_VEHICLES_FORECAST_RETENTION:5m}
+  maximum-forecasts: ${LIVE_VEHICLES_MAXIMUM_FORECASTS:5000}
   retry-delay: 5s
   shutdown-timeout: 10s
   grpc-token: ${LIVE_VEHICLES_GRPC_TOKEN:}
