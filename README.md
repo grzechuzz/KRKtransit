@@ -16,6 +16,13 @@ GTFS: https://gtfs.org/documentation/overview/
 
 Dane ZTP: https://gtfs.ztp.krakow.pl/
 
+<img width="1905" height="908" alt="image" src="https://github.com/user-attachments/assets/f7822b14-be2e-4658-b377-f10e1a21ea6f" />
+<img width="1909" height="903" alt="image" src="https://github.com/user-attachments/assets/cb880699-c1ce-4833-b419-9f95bf2d5027" />
+<img width="1898" height="907" alt="image" src="https://github.com/user-attachments/assets/33f73609-59e4-43f3-95a2-4355c414c0a3" />
+<img width="1908" height="898" alt="image" src="https://github.com/user-attachments/assets/a01c7ed6-bae7-478d-a6a9-419f720a1738" />
+
+
+
 ## Architektura
 
 System składa się z sześciu serwisów, z których każdy realizuje konkretny etap przepływu danych. Moduły serwisów nie importują się bezpośrednio nawzajem, są rozdzielone względem odpowiedzialności i komunikują się przez kontrakty gRPC oraz Redis Streams. Rozkłady jazdy i zdarzenia na przystankach są trzymane w bazie danych PostgreSQL, podzielonej na dwa schematy: `gtfs_schedule` i `stop_events`.
